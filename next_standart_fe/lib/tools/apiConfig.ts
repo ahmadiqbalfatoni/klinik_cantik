@@ -4,12 +4,28 @@
  */
 
 export const getBackendApiUrl = (): string => {
-    let url = process.env.API_URL || process.env.NEXT_PUBLIC_URL_API || process.env.NEXT_PUBLIC_API_BASE_URL || '';
+    const isProd = process.env.NODE_ENV === 'production';
+    const candidates = [
+        process.env.NEXT_PUBLIC_API_URL,
+        process.env.API_URL,
+        process.env.NEXT_PUBLIC_URL_API,
+        process.env.NEXT_PUBLIC_API_BASE_URL,
+    ];
+
+    let url = '';
+    for (const cand of candidates) {
+        if (!cand || cand.includes('<') || cand.includes('>')) continue;
+        if (isProd && (cand.includes('localhost') || cand.includes('127.0.0.1'))) {
+            continue;
+        }
+        url = cand;
+        break;
+    }
 
     // Jika kosong atau masih berupa placeholder bawaan template
-    if (!url || url.includes('<') || url.includes('>')) {
-        if (process.env.NODE_ENV === 'production') {
-            return 'https://worthy-illumination-production-844e.up.railway.app/api/v1';
+    if (!url) {
+        if (isProd) {
+            return 'https://efficient-integrity-production.up.railway.app/api/v1';
         }
         return 'http://localhost:8000/api/v1';
     }

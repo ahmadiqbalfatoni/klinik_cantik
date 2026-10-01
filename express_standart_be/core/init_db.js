@@ -40,6 +40,41 @@ export async function ensureRequiredColumnsExist() {
         }
       }
     }
+    const hasRmr = await DB.schema.hasTable("trx_rekam_medis_ruangan");
+    if (!hasRmr) {
+      await DB.schema.createTable("trx_rekam_medis_ruangan", (table) => {
+        table.increments("id").primary();
+        table.string("kode_rekam_medis_ruangan", 50).notNullable().unique();
+        table.integer("id_rekam_medis").notNullable();
+        table.string("kode_kunjungan", 20).notNullable();
+        table.string("kode_antrian_layanan", 20).nullable();
+        table.string("kode_ruangan", 20).notNullable();
+        table.string("nama_ruangan", 100).nullable();
+        table.string("kode_karyawan", 20).nullable();
+        table.json("data_form").nullable();
+        table.text("catatan_tindakan").nullable();
+        table.text("catatan_petugas").nullable();
+        table.text("catatan_hasil_treatment").nullable();
+        table.enum("status", ["berlangsung", "selesai", "batal"]).defaultTo("berlangsung");
+        table.string("tz", 50).defaultTo("Asia/Jakarta");
+        table.string("created_by", 100).nullable();
+        table.timestamp("created_at").defaultTo(DB.fn.now());
+        table.string("updated_by", 100).nullable();
+        table.timestamp("updated_at").defaultTo(DB.fn.now());
+      });
+      console.log("✅ Table 'trx_rekam_medis_ruangan' created");
+    }
+
+    const hasRmf = await DB.schema.hasTable("trx_rekam_medis_foto");
+    if (hasRmf) {
+      const hasRmrCol = await DB.schema.hasColumn("trx_rekam_medis_foto", "id_rekam_medis_ruangan");
+      if (!hasRmrCol) {
+        await DB.schema.alterTable("trx_rekam_medis_foto", (table) => {
+          table.integer("id_rekam_medis_ruangan").nullable().after("id_rekam_medis");
+        });
+        console.log("✅ Column 'id_rekam_medis_ruangan' added to trx_rekam_medis_foto");
+      }
+    }
   } catch (err) {
     console.error("⚠️ Error ensuring required columns:", err.message);
   }
@@ -58,6 +93,7 @@ export async function checkAndInitDatabase(force = false) {
 
     const possiblePaths = [
       path.join(__dirname, "../db_klinik_kecantikan.sql"),
+      path.join(process.cwd(), "express_standart_be/db_klinik_kecantikan.sql"),
       path.join(process.cwd(), "db_klinik_kecantikan.sql"),
       path.join(process.cwd(), "../db_klinik_kecantikan.sql"),
     ];

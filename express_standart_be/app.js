@@ -17,6 +17,12 @@
 
 import cors from "cors";
 import express from "express";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import APIV1 from "./routes/v1/index.js";
 
@@ -41,7 +47,7 @@ app.use(
         allowedOrigins.length === 0 ||
         allowedOrigins.includes("*") ||
         allowedOrigins.includes(origin) ||
-        origin.endsWith(".up.railway.app") ||
+        origin.includes("railway.app") ||
         origin.includes("localhost") ||
         origin.includes("127.0.0.1")
       ) {
@@ -57,6 +63,11 @@ app.use(
       "X-Timestamp",
       "X-Signature",
       "X-Credential",
+      "X-Endpoint",
+      "X-Custom-Header",
+      "X-Level",
+      "X-Kode-Cabang",
+      "X-UniqueId",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     optionSuccessStatus: 200,
@@ -103,7 +114,11 @@ app.use(
   APIV1
 );
 
-app.use('/uploads', express.static('public/uploads'))
+const uploadsDir = path.join(__dirname, "public", "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 app.use((req, res, next) => {
   console.log(req.url)

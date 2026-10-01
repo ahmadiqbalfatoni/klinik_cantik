@@ -27,60 +27,79 @@ pg.types.setTypeParser(pg.types.builtins.TIMESTAMP, parseFn);
 pg.types.setTypeParser(pg.types.builtins.TIMESTAMPTZ, parseFn);
 pg.types.setTypeParser(pg.types.builtins.DATE, parseFn);
 
-const getConnectionConfig = ({ dbms, host, port, username, password, database }) => {
-  const baseConfig = {
-    host: host || "localhost",
-    port: Number(port) || (dbms === "pg" || dbms === "postgresql" ? 5432 : 3306),
-    user: username || "",
-    password: password || "",
-    database: database || "",
-  };
-
-  if (dbms === "mysql" || dbms === "mysql2") {
+const parseDbUrl = (dbUrl) => {
+  if (!dbUrl) return null;
+  try {
+    const parsed = new URL(dbUrl);
+    const dbms = parsed.protocol.replace(':', '');
     return {
-      ...baseConfig,
-      timezone: MYSQL_TZ,
-      dateStrings: false,
-      multipleStatements: true,
+      dbms: dbms.includes('pg') ? 'pg' : 'mysql2',
+      host: parsed.hostname,
+      port: Number(parsed.port) || (dbms.includes('pg') ? 5432 : 3306),
+      username: decodeURIComponent(parsed.username || ''),
+      password: decodeURIComponent(parsed.password || ''),
+      database: parsed.pathname.replace(/^\//, '') || '',
     };
+  } catch {
+    return null;
   }
-
-  if (dbms === "pg" || dbms === "postgresql") {
-    return {
-      ...baseConfig,
-      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
-    };
-  }
-
-  return baseConfig;
 };
 
+const rawDbUrl = process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.MYSQL_PRIVATE_URL;
+const parsedUrl = parseDbUrl(rawDbUrl);
 
-const dbUrl = process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.MYSQL_PRIVATE_URL;
+const isRailwayOrProd = Boolean(
+  process.env.RAILWAY_ENVIRONMENT ||
+  process.env.RAILWAY_PROJECT_ID ||
+  process.env.MYSQLHOST ||
+  process.env.NODE_ENV === 'production'
+);
+
+const resolvedDbms = process.env.DB_DBMS || parsedUrl?.dbms || "mysql2";
+
+let resolvedHost = parsedUrl?.host || process.env.MYSQLHOST || process.env.MYSQL_HOST;
+if (!resolvedHost) {
+  if (isRailwayOrProd && (!process.env.DB_HOST || process.env.DB_HOST === '127.0.0.1' || process.env.DB_HOST === 'localhost')) {
+    resolvedHost = 'mysql.railway.internal';
+  } else {
+    resolvedHost = process.env.DB_HOST || 'localhost';
+  }
+}
+
+const resolvedPort = parsedUrl?.port || Number(process.env.MYSQLPORT || process.env.MYSQL_PORT || process.env.DB_PORT) || (resolvedDbms.includes('pg') ? 5432 : 3306);
+const resolvedUser = parsedUrl?.username || process.env.MYSQLUSER || process.env.MYSQL_USER || process.env.DB_USERNAME || process.env.DB_USER || "root";
+const resolvedPassword = parsedUrl?.password || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || process.env.MYSQL_ROOT_PASSWORD || process.env.DB_PASSWORD || "";
+
+let resolvedDatabase = parsedUrl?.database || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE;
+if (!resolvedDatabase) {
+  resolvedDatabase = isRailwayOrProd ? (process.env.DB_DATABASE || 'railway') : (process.env.DB_DATABASE || process.env.DB_NAME || 'db_klinik_kecantikan');
+}
+
+const connectionConfig = {
+  host: resolvedHost,
+  port: resolvedPort,
+  user: resolvedUser,
+  password: resolvedPassword,
+  database: resolvedDatabase,
+  timezone: MYSQL_TZ,
+  dateStrings: false,
+  multipleStatements: true,
+  ...(resolvedDbms.includes('pg')
+    ? { ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false }
+    : (process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}))
+};
 
 const knexConfig = {
   default: {
-    client: process.env.DB_DBMS || "mysql2",
-    connection: dbUrl
-      ? (dbUrl.includes("?")
-          ? `${dbUrl}&multipleStatements=true`
-          : `${dbUrl}?multipleStatements=true`)
-      : getConnectionConfig({
-      dbms: process.env.DB_DBMS || "mysql2",
-      host: process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST,
-      port: process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT,
-      username: process.env.DB_USERNAME || process.env.DB_USER || process.env.MYSQLUSER || process.env.MYSQL_USER,
-      password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD,
-      database: process.env.DB_DATABASE || process.env.DB_NAME || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE,
-    }),
+    client: resolvedDbms,
+    connection: connectionConfig,
     pool: {
       min: 2,
-      max: process.env.DB_DBMS === "pg" ? 10 : 20,
+      max: resolvedDbms === "pg" ? 10 : 20,
       idleTimeoutMillis: 30000,
 
       afterCreate: function (conn, done) {
-        const dbms = process.env.DB_DBMS;
-        if (dbms === "pg" || dbms === "postgresql") {
+        if (resolvedDbms === "pg" || resolvedDbms === "postgresql") {
           conn.query(`SET TIME ZONE '${TARGET_TZ}';`, function (err) {
             done(err, conn);
           });

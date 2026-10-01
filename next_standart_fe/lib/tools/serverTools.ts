@@ -92,13 +92,14 @@ const routeMiddleware = async (searchUrl: string) => {
             const cached = userMenuCache.get(userCode);
             if (cached && (Date.now() - cached.timestamp < MENU_CACHE_TTL)) {
                 menu = cached.menu;
-            } else {
+                const apiUrl = getBackendApiUrl();
                 const resp = await axios.post(
-                    `${process.env.NEXT_PUBLIC_API_DIR_PATH}`,
+                    `${apiUrl}/setup/nav/user-data`,
                     { user_code: userCode },
                     {
                         headers: {
-                            'X-ENDPOINT': "/setup/nav/user-data",
+                            'Content-Type': 'application/json',
+                            'X-Timestamp': formatDateISO(new Date()) as string,
                             'X-Level': "1",
                         }
                     }

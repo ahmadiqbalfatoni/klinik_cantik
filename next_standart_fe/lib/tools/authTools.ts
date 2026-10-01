@@ -19,6 +19,16 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { JWT } from 'next-auth/jwt';
 import { refreshToken } from '@/lib/tools/serverTools'; // Pastikan path import ini benar
 
+if (process.env.NODE_ENV === 'production') {
+    process.env.AUTH_TRUST_HOST = 'true';
+    if (process.env.NEXTAUTH_URL && (process.env.NEXTAUTH_URL.includes('localhost') || process.env.NEXTAUTH_URL.includes('127.0.0.1'))) {
+        delete process.env.NEXTAUTH_URL;
+    }
+    if (process.env.AUTH_URL && (process.env.AUTH_URL.includes('localhost') || process.env.AUTH_URL.includes('127.0.0.1'))) {
+        delete process.env.AUTH_URL;
+    }
+}
+
 const authOptions: NextAuthConfig = {
     providers: [
         CredentialsProvider({

@@ -88,7 +88,7 @@ const getFullImageUrl = (url?: string) => {
         return url;
     }
     const clean = url.startsWith('/') ? url : `/${url}`;
-    return `http://127.0.0.1:8000${clean}`;
+    return clean;
 };
 
 export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
@@ -1677,7 +1677,8 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                             onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 if (previewPhotoUrl && !target.src.includes('/api/assets')) {
-                                    target.src = `/api/assets${previewPhotoUrl.replace('http://127.0.0.1:8000', '')}`;
+                                    const cleanPath = previewPhotoUrl.replace(/^https?:\/\/[^/]+/, '');
+                                    target.src = `/api/assets${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
                                 }
                             }}
                         />
