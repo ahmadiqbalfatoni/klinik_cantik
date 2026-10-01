@@ -35,6 +35,11 @@ export const getBackendApiUrl = (): string => {
         url = url.replace('efficient-integrity-production.up.railway.app', 'efficient-integrity-production-7aa7.up.railway.app');
     }
 
+    // Pastikan selalu memiliki prefix protokol http:// atau https://
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = (isProd ? 'https://' : 'http://') + url;
+    }
+
     url = url.endsWith('/') ? url.slice(0, -1) : url;
 
     if (!url.endsWith('/api/v1')) {
