@@ -47,8 +47,12 @@ const logout = async (
 
     if (typeof window !== "undefined") {
         if (redirectToLogin) {
-            const base = window.location.origin;
-            await signOut({ callbackUrl: `${base}/auth/login` });
+            try {
+                await signOut({ redirect: false });
+            } catch (error) {
+                console.error("Logout error:", error);
+            }
+            window.location.href = "/auth/login";
         }
         return;
     }

@@ -26,9 +26,16 @@ const AppTopbar = forwardRef<AppTopbarRef>((props, ref) => {
         return () => clearInterval(timer);
     }, []);
 
-    const handleLogout = () => {
-        signOut()
-    }
+    const handleLogout = async () => {
+        try {
+            await signOut({ redirect: false });
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+        if (typeof window !== 'undefined') {
+            window.location.href = '/auth/login';
+        }
+    };
 
     return (
         <div className="layout-topbar">

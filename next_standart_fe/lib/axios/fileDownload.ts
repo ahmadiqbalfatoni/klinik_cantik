@@ -34,7 +34,14 @@ Axios.interceptors.response.use(
         }
 
         if (error.response?.status === 401) {
-            await signOut({ callbackUrl: "/auth/login" });
+            try {
+                await signOut({ redirect: false });
+            } catch (err) {
+                console.error("SignOut error:", err);
+            }
+            if (typeof window !== "undefined") {
+                window.location.href = "/auth/login";
+            }
         }
         return Promise.reject(error);
     }

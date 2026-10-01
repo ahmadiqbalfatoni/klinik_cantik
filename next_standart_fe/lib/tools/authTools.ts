@@ -19,14 +19,22 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { JWT } from 'next-auth/jwt';
 import { refreshToken } from '@/lib/tools/serverTools'; // Pastikan path import ini benar
 
+const getProductionAuthUrl = () => {
+    const raw = process.env.NEXTAUTH_URL || process.env.AUTH_URL;
+    if (raw && !raw.includes('localhost') && !raw.includes('127.0.0.1') && !raw.includes('0.0.0.0')) {
+        return raw.startsWith('http') ? raw : `https://${raw}`;
+    }
+    if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+        return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+    }
+    return 'https://klinikcantik-production.up.railway.app';
+};
+
 if (process.env.NODE_ENV === 'production') {
     process.env.AUTH_TRUST_HOST = 'true';
-    if (process.env.NEXTAUTH_URL && (process.env.NEXTAUTH_URL.includes('localhost') || process.env.NEXTAUTH_URL.includes('127.0.0.1'))) {
-        delete process.env.NEXTAUTH_URL;
-    }
-    if (process.env.AUTH_URL && (process.env.AUTH_URL.includes('localhost') || process.env.AUTH_URL.includes('127.0.0.1'))) {
-        delete process.env.AUTH_URL;
-    }
+    const prodUrl = getProductionAuthUrl();
+    process.env.NEXTAUTH_URL = prodUrl;
+    process.env.AUTH_URL = prodUrl;
 }
 
 const authOptions: NextAuthConfig = {
@@ -60,6 +68,23 @@ const authOptions: NextAuthConfig = {
         maxAge: 7 * 24 * 60 * 60,
     },
     callbacks: {
+        async redirect({ url, baseUrl }) {
+            if (url.startsWith('/')) {
+                return `${baseUrl}${url}`;
+            }
+            if (url.includes('0.0.0.0') || url.includes('localhost')) {
+                return `${baseUrl}/auth/login`;
+            }
+            try {
+                const parsedUrl = new URL(url);
+                if (parsedUrl.origin === baseUrl) {
+                    return url;
+                }
+            } catch {
+                // ignore URL parse errors
+            }
+            return `${baseUrl}/auth/login`;
+        },
         async jwt({ token, user }: { token: JWT; user?: User; }) {
             // 1. Initial sign in (Pertama kali login)
             if (user) {
