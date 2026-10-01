@@ -77,11 +77,11 @@ const routeMiddleware = async (searchUrl: string) => {
         return '99';
     }
 
-    const dSessionExp = parse(session?.expires, 'yyyy-MM-dd HH:mm:ss', new Date());
-    const dNow = new Date();
-
-    if ((dNow.getTime() > dSessionExp.getTime())) {
-        return '99';
+    if (session?.expires) {
+        const expTime = new Date(session.expires).getTime();
+        if (!isNaN(expTime) && Date.now() > expTime) {
+            return '99';
+        }
     }
 
     let urlFix = searchUrl;

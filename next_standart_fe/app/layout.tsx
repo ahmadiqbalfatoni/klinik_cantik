@@ -21,6 +21,7 @@ export const viewport: Viewport = {
 
 // 2. Metadata Klinik Kecantikan
 export const metadata: Metadata = {
+    metadataBase: new URL(process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.includes('localhost') ? process.env.NEXTAUTH_URL : 'https://klinikcantik-production.up.railway.app'),
     title: {
         default: 'Klinik Kecantikan - Aesthetic & Wellness Hub',
         template: '%s | Klinik Kecantikan',
