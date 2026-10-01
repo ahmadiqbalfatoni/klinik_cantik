@@ -32,6 +32,11 @@ import { useragentMiddleware } from "./middleware/allow_user_agent.js";
 import secureHeader from "./middleware/secure_header.js";
 import Logger from "./middleware/logger.js";
 
+// Normalisasi ASSETS_PATH agar tidak pernah menggunakan localhost pada hosting online
+if (!process.env.ASSETS_PATH || process.env.ASSETS_PATH.includes("localhost") || process.env.ASSETS_PATH.includes("127.0.0.1")) {
+  process.env.ASSETS_PATH = "/api/assets";
+}
+
 const app = express();
 
 const allowedOrigins = (process.env.ORIGIN || process.env.FRONTEND_URL || "")
@@ -119,6 +124,8 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 app.use('/uploads', express.static(uploadsDir));
+app.use('/api/assets/uploads', express.static(uploadsDir));
+app.use('/api/assets', express.static(uploadsDir));
 
 app.use((req, res, next) => {
   console.log(req.url)

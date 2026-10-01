@@ -27,8 +27,35 @@ const Axios = axios.create({
 });
 
 
+const cleanLocalhostAssets = (val: any): any => {
+    if (!val) return val;
+    if (typeof val === 'string') {
+        if (val.includes('localhost') && (val.includes('/api/assets') || val.includes('/uploads/'))) {
+            const match = val.match(/https?:\/\/[^\/]+(\/.*)/);
+            if (match && match[1]) return match[1];
+        }
+        return val;
+    }
+    if (Array.isArray(val)) {
+        return val.map(cleanLocalhostAssets);
+    }
+    if (typeof val === 'object') {
+        const copy: any = {};
+        for (const k of Object.keys(val)) {
+            copy[k] = cleanLocalhostAssets(val[k]);
+        }
+        return copy;
+    }
+    return val;
+};
+
 Axios.interceptors.response.use(
-    r => r,
+    r => {
+        if (r && r.data) {
+            r.data = cleanLocalhostAssets(r.data);
+        }
+        return r;
+    },
     async (error) => {
         if (error.response?.status === 401) {
             try {

@@ -16,7 +16,7 @@ import { Divider } from 'primereact/divider';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
-import { showError, showSuccess } from '@/lib/tools/generalTools';
+import { showError, showSuccess, formatImageUrl } from '@/lib/tools/generalTools';
 import { ImageCropDialog } from '../components/ImageCropDialog';
 
 const Page = () => {
@@ -257,7 +257,7 @@ const Page = () => {
             kode_ruangan_konsultasi: isKonsul ? '' : (rowData.kode_ruangan_konsultasi || ''),
             tipe: isKonsul ? 'SERVICE TREATMENT' : (rowData.tipe || 'BEAUTY TREATMENT'),
             foto: null,
-            foto_url: rowData.foto || '',
+            foto_url: formatImageUrl(rowData.foto) || '',
             hapus_foto: false,
         });
         setDialogVisible(true);
@@ -581,7 +581,7 @@ const Page = () => {
                             >
                                 {r.foto ? (
                                     <img
-                                        src={r.foto}
+                                        src={formatImageUrl(r.foto)}
                                         alt={r.nama}
                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                         onError={(e: any) => {
@@ -764,7 +764,7 @@ const Page = () => {
                                         />
                                     ) : (
                                         <img
-                                            src={formData.foto_url}
+                                            src={formatImageUrl(formData.foto_url)}
                                             alt="Preview"
                                             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                                             onError={(e: any) => {

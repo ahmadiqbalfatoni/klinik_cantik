@@ -131,4 +131,17 @@ export const formatReceiptCurrency = (value: number | string | null | undefined)
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     }).format(Number(value));
+};
+
+export const formatImageUrl = (url?: string | null): string => {
+    if (!url) return '';
+    if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+    // Jika URL mengandung localhost atau 127.0.0.1 (dari backend default lama)
+    if (url.includes('localhost') || url.includes('127.0.0.1')) {
+        const match = url.match(/https?:\/\/[^\/]+(\/.*)/);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+    return url;
 };
