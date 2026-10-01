@@ -16,7 +16,12 @@ for (const cand of candidates) {
 }
 
 const cleanAsset = rawAsset ? rawAsset.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '') : '';
-const assetHost = cleanAsset || (isProd ? 'https://efficient-integrity-production.up.railway.app' : 'http://127.0.0.1:8000');
+let assetHost = cleanAsset || (isProd ? 'https://efficient-integrity-production-7aa7.up.railway.app' : 'http://127.0.0.1:8000');
+
+// Auto-koreksi jika domain Railway tertulis tanpa suffix -7aa7
+if (assetHost.includes('efficient-integrity-production.up.railway.app') && !assetHost.includes('-7aa7')) {
+    assetHost = assetHost.replace('efficient-integrity-production.up.railway.app', 'efficient-integrity-production-7aa7.up.railway.app');
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

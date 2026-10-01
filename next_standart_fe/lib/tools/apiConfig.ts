@@ -25,9 +25,14 @@ export const getBackendApiUrl = (): string => {
     // Jika kosong atau masih berupa placeholder bawaan template
     if (!url) {
         if (isProd) {
-            return 'https://efficient-integrity-production.up.railway.app/api/v1';
+            return 'https://efficient-integrity-production-7aa7.up.railway.app/api/v1';
         }
         return 'http://localhost:8000/api/v1';
+    }
+
+    // Auto-koreksi jika domain Railway tertulis tanpa suffix -7aa7
+    if (url.includes('efficient-integrity-production.up.railway.app') && !url.includes('-7aa7')) {
+        url = url.replace('efficient-integrity-production.up.railway.app', 'efficient-integrity-production-7aa7.up.railway.app');
     }
 
     url = url.endsWith('/') ? url.slice(0, -1) : url;
