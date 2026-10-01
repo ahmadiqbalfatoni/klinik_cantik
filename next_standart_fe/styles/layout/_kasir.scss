@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Kasir Layout Styles (Single-Screen Viewport Fit, Aligned with Global Layout)
+   ========================================================================== */
+
+@media (min-width: 1024px) {
+  html:has(.layout-kasir-wrapper),
+  body:has(.layout-kasir-wrapper) {
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+  }
+
+  .layout-wrapper.layout-kasir-wrapper {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Menggunakan padding dan margin yang SAMA PERSIS dengan halaman lain:
+     - Atas: 7rem (sejajar dengan top: 7rem sidebar)
+     - Kanan: 2.5rem (sama persis dengan halaman lain)
+     - Bawah: 2rem (sejajar dengan bawah sidebar calc(100vh - 9rem) + 7rem = 100vh - 2rem)
+     - Kiri: 0rem saat static (margin-left: 300px), 2rem saat inactive/overlay
+  */
+  .layout-main-container.layout-kasir-container {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 7rem 2.5rem 2rem 0rem;
+    box-sizing: border-box;
+  }
+
+  .layout-wrapper.layout-static-inactive .layout-main-container.layout-kasir-container,
+  .layout-wrapper.layout-overlay .layout-main-container.layout-kasir-container {
+    padding-left: 2rem;
+  }
+
+  .layout-main.layout-kasir-main {
+    flex: 1 1 0%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  .kasir-page-container {
+    flex: 1 1 0%;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .kasir-main-layout {
+    flex: 1 1 0%;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .kasir-sidebar-wrapper {
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    width: 290px;
+    flex-shrink: 0;
+  }
+
+  .kasir-pos-wrapper {
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 0%;
+  }
+}
+
+@media (max-width: 1023px) {
+  .layout-wrapper.layout-kasir-wrapper {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .layout-main-container.layout-kasir-container {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    padding: 7rem 2rem 2rem 2rem;
+  }
+
+  .layout-main.layout-kasir-main {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .kasir-page-container {
+    height: auto;
+    overflow: visible;
+  }
+
+  .kasir-main-layout {
+    height: auto;
+    overflow: visible;
+    flex-direction: column;
+  }
+
+  .kasir-sidebar-wrapper {
+    width: 100%;
+    height: 420px !important;
+    max-height: 420px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-bottom: 1rem;
+
+    > div {
+      flex: 1 1 0%;
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+  }
+
+  .kasir-pos-wrapper {
+    width: 100%;
+    height: auto;
+  }
+
+  .kasir-pos-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Scrollbar tipis & overscroll contain untuk area scroll kasir */
+.kasir-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  overscroll-behavior: contain;
+
+  &::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+}
