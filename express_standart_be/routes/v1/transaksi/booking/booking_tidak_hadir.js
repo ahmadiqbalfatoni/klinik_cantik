@@ -10,7 +10,7 @@
 
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { formatDateSystem, getJakartaYmdNow, formatTimeOnlyTZ } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
@@ -28,9 +28,8 @@ router.post("/", async (req, res) => {
     const isAutoScan = oPayload.auto_scan === true || !kodeBooking;
 
     const nowFormatted = formatDateSystem();
-    const now = new Date();
-    const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const todayYmd = getJakartaYmdNow();
+    const nowTimeStr = formatTimeOnlyTZ(new Date(), "HH:mm:ss", "Asia/Jakarta");
 
     // Ambil konfigurasi toleransi keterlambatan dari tabel config (default: 30 menit)
     const cfgToleransi = await DB("config")

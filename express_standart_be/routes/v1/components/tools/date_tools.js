@@ -55,7 +55,10 @@ export const formatDateSystem = (
         ? new Date(date)
         : date;
 
-    let tz = process.env.APP_TZ || "UTC";
+    let tz = process.env.APP_TZ || "Asia/Jakarta";
+    if (tz === "UTC" && !timeZoneKey) {
+        tz = "Asia/Jakarta";
+    }
 
     if (timeZoneKey) {
         tz = timeZoneKey;
@@ -65,6 +68,25 @@ export const formatDateSystem = (
 
     return formatInTimeZone(dateObj, tz, formatStr);
 }
+
+export const getJakartaMinutesNow = () => {
+    try {
+        const str = formatInTimeZone(new Date(), "Asia/Jakarta", "HH:mm");
+        const [h, m] = str.split(":").map(Number);
+        return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+    } catch {
+        const now = new Date();
+        return now.getHours() * 60 + now.getMinutes();
+    }
+};
+
+export const getJakartaYmdNow = () => {
+    try {
+        return formatInTimeZone(new Date(), "Asia/Jakarta", "yyyy-MM-dd");
+    } catch {
+        return new Date().toISOString().slice(0, 10);
+    }
+};
 
 export function datetime() {
     const now = new Date();

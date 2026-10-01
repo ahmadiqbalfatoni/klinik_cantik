@@ -32,6 +32,11 @@ import { useragentMiddleware } from "./middleware/allow_user_agent.js";
 import secureHeader from "./middleware/secure_header.js";
 import Logger from "./middleware/logger.js";
 
+process.env.TZ = "Asia/Jakarta";
+if (!process.env.APP_TZ || process.env.APP_TZ === "UTC") {
+  process.env.APP_TZ = "Asia/Jakarta";
+}
+
 // Normalisasi ASSETS_PATH agar tidak pernah menggunakan localhost pada hosting online
 if (!process.env.ASSETS_PATH || process.env.ASSETS_PATH.includes("localhost") || process.env.ASSETS_PATH.includes("127.0.0.1")) {
   process.env.ASSETS_PATH = "/api/assets";

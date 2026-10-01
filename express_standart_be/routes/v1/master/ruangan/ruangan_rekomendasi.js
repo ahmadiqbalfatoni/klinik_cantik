@@ -10,7 +10,7 @@
 
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { formatDateSystem, getJakartaMinutesNow, getJakartaYmdNow } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
@@ -414,7 +414,7 @@ const handleGetRekomendasiOptions = async (req, res) => {
       if (nearestBkg && nearestBkg.jam_booking) {
         const [bH, bM] = String(nearestBkg.jam_booking).slice(0, 5).split(":").map(Number);
         const bookingMinutes = (isNaN(bH) ? 0 : bH) * 60 + (isNaN(bM) ? 0 : bM);
-        const nowMin = nowTime.getHours() * 60 + nowTime.getMinutes();
+        const nowMin = getJakartaMinutesNow();
         const menitMenujuBooking = bookingMinutes - nowMin;
         slackMenit = menitMenujuBooking - sisaBebanMenit - bufferMenit;
 
@@ -1010,7 +1010,7 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
               const [eh, em] = (activeStaff.jam_selesai || "23:59").slice(0, 5).split(":").map(Number);
               const sMin = (isNaN(sh) ? 0 : sh) * 60 + (isNaN(sm) ? 0 : sm);
               const eMin = (isNaN(eh) ? 0 : eh) * 60 + (isNaN(em) ? 0 : em);
-              const nowMinutes = todayDate.getHours() * 60 + todayDate.getMinutes();
+              const nowMinutes = getJakartaMinutesNow();
 
               const roomInfo = await trx("mst_ruangan").where("kode_ruangan", rKode).first();
               const namaRuangan = roomInfo?.nama_ruangan || rNama || rKode;
@@ -1081,7 +1081,7 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
 
                 const [bH, bM] = String(nearestBkg.jam_booking).slice(0, 5).split(":").map(Number);
                 const bookingMinutes = (isNaN(bH) ? 0 : bH) * 60 + (isNaN(bM) ? 0 : bM);
-                const nowMin = todayDate.getHours() * 60 + todayDate.getMinutes();
+                const nowMin = getJakartaMinutesNow();
                 const menitMenujuBooking = bookingMinutes - nowMin;
                 const slackMenit = menitMenujuBooking - totalSisaBeban - bufferBookingMenit;
 

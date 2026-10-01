@@ -10,7 +10,7 @@
 
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { formatDateSystem, getJakartaMinutesNow } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
@@ -141,7 +141,7 @@ const handleGetOptions = async (req, res) => {
 
     const nowTime = new Date();
     const nowTimestamp = nowTime.getTime();
-    const nowMinutes = nowTime.getHours() * 60 + nowTime.getMinutes();
+    const nowMinutes = getJakartaMinutesNow();
 
     const minRelevantBookingDate = new Date(nowTimestamp - toleransiMenit * 60000);
     const minRelevantBookingTimeStr = minRelevantBookingDate.toTimeString().slice(0, 8); // "HH:mm:ss"
@@ -363,7 +363,7 @@ const handleGetOptions = async (req, res) => {
       if (nearestBkg && nearestBkg.jam_booking) {
         const [bH, bM] = String(nearestBkg.jam_booking).slice(0, 5).split(":").map(Number);
         const bookingMinutes = (isNaN(bH) ? 0 : bH) * 60 + (isNaN(bM) ? 0 : bM);
-        const nowMin = nowTime.getHours() * 60 + nowTime.getMinutes();
+        const nowMin = getJakartaMinutesNow();
         const menitMenujuBooking = bookingMinutes - nowMin;
         slackMenit = menitMenujuBooking - sisaBebanMenit - bufferMenit;
 

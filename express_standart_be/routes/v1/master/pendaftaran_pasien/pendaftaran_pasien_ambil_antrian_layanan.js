@@ -10,7 +10,7 @@
 
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { formatDateSystem, getJakartaMinutesNow, getJakartaYmdNow } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
@@ -54,7 +54,7 @@ router.post("/", async (req, res) => {
     // 2. Eksekusi 1 Transaksi DB Atomic
     await DB.transaction(async (trx) => {
       const now = new Date();
-      const todayYmd = formatDateSystem(now, "yyyy-MM-dd") || now.toISOString().slice(0, 10);
+      const todayYmd = getJakartaYmdNow();
       const todayStr = todayYmd.replace(/-/g, "");
 
       const HARI_MAP = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
@@ -544,8 +544,8 @@ router.post("/", async (req, res) => {
             throw err;
           }
 
-          // Validasi apakah sesi jadwal yang dipilih atau sesi ruangan sedang aktif saat ini (Walk-In)
-          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          // Validasi apakah sesi jadwal yang dipilih atau sesi ruangan sedang aktif/dapat melayani hari ini (WIB)
+          const nowMinutes = getJakartaMinutesNow();
           const selectedJadwalKode = item.kode_jadwal || oPayload.kode_jadwal;
           let targetSchedule = null;
           if (selectedJadwalKode) {
@@ -564,16 +564,9 @@ router.post("/", async (req, res) => {
             const endStr = (targetSchedule.jam_selesai || "00:00").slice(0, 5);
             const staffName = targetSchedule.nama_petugas ? ` (${targetSchedule.nama_petugas})` : "";
 
-            if (nowMinutes < startMin) {
-              const err = new Error(
-                `Sesi pelayanan di ${namaRuanganTarget}${staffName} baru dimulai pukul ${startStr} WIB (jadwal: ${startStr}-${endStr} WIB). Pendaftaran walk-in antrean hanya dapat dilakukan saat sesi telah aktif, atau silakan buat reservasi melalui menu Booking.`
-              );
-              err.statusCode = 422;
-              throw err;
-            }
             if (nowMinutes >= endMin) {
               const err = new Error(
-                `Sesi pelayanan di ${namaRuanganTarget}${staffName} telah berakhir pukul ${endStr} WIB (jadwal: ${startStr}-${endStr} WIB). Pendaftaran walk-in antrean tidak dapat diproses.`
+                `Sesi pelayanan di ${namaRuanganTarget}${staffName} telah berakhir pukul ${endStr} WIB (jadwal: ${startStr}-${endStr} WIB). Pendaftaran antrean tidak dapat diproses.`
               );
               err.statusCode = 422;
               throw err;
@@ -650,8 +643,8 @@ router.post("/", async (req, res) => {
             }
           }
 
-          // Validasi ketersediaan dokter jaga di Ruang Konsultasi hari ini & saat ini
-          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          // Validasi ketersediaan dokter jaga di Ruang Konsultasi hari ini & saat ini (WIB)
+          const nowMinutes = getJakartaMinutesNow();
 
           const activeDoctorsInKonsul = await trx("mst_jadwal_karyawan as j")
             .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
