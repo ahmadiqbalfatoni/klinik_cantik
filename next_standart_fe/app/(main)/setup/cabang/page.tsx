@@ -17,6 +17,7 @@ import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { useSession } from 'next-auth/react';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 interface CabangRecord {
     id?: number;
@@ -271,38 +272,7 @@ export default function ManajemenCabangPage() {
                 </div>
 
                 {/* Keterangan Status */}
-                <div className="flex flex-wrap align-items-center gap-3 px-3 py-2 mb-3 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                    <span className="flex align-items-center gap-1">
-                        <i className="pi pi-info-circle text-gray-500" />
-                        <span className="font-semibold text-gray-700">KETERANGAN STATUS:</span>
-                    </span>
-                    <span className="flex align-items-center gap-1.5 text-gray-700">
-                        <span
-                            style={{
-                                display: 'inline-block',
-                                width: '12px',
-                                height: '12px',
-                                borderRadius: '3px',
-                                backgroundColor: '#22c55e',
-                                boxShadow: '0 1px 3px #22c55e55',
-                            }}
-                        />
-                        Aktif
-                    </span>
-                    <span className="flex align-items-center gap-1.5 text-gray-700">
-                        <span
-                            style={{
-                                display: 'inline-block',
-                                width: '12px',
-                                height: '12px',
-                                borderRadius: '3px',
-                                backgroundColor: '#ef4444',
-                                boxShadow: '0 1px 3px #ef444455',
-                            }}
-                        />
-                        Tidak Aktif
-                    </span>
-                </div>
+                <KeteranganStatus className="mb-3" />
 
                 {/* DataTable Cabang */}
                 <DataTable

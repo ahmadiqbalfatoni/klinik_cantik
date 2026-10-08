@@ -338,21 +338,22 @@ export const TabPasienLama: React.FC<Props> = ({
           dataKey="no_rm"
           emptyMessage="Data Kosong"
           rowsPerPageOptions={[10, 25, 50]}
-          className="p-datatable-sm p-datatable-gridlines"
+          tableStyle={{ minWidth: '1360px' }}
+          className="p-datatable-sm p-datatable-gridlines pasien-lama-table"
           paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
           currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data"
         >
           <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
-          <Column field="no_rm" header="No. RM" body={noRmBodyTemplate} align="center" sortable style={{ minWidth: '8rem' }} />
-          <Column field="nama" header="Nama Pasien" className="font-bold text-900" sortable style={{ minWidth: '12rem' }} />
-          <Column field="nik" header="NIK" align="center" style={{ minWidth: '10rem' }} body={(r: Pasien) => r.nik || '-'} />
-          <Column field="no_hp" header="No. HP" align="center" style={{ minWidth: '10rem' }} body={(r: Pasien) => r.no_hp || '-'} />
-          <Column field="tanggal_lahir" header="Tgl Lahir" align="center" style={{ minWidth: '8rem' }} body={(r: Pasien) => (r.tanggal_lahir ? r.tanggal_lahir.split('T')[0] : '-')} />
-          <Column header="L/P" body={jenisKelaminBodyTemplate} align="center" style={{ minWidth: '7rem' }} />
-          <Column field="kota_kabupaten" header="Kota / Alamat" style={{ minWidth: '12rem' }} body={(r: Pasien) => r.kota_kabupaten || r.provinsi || '-'} />
-          <Column field="status" header="Status" body={statusBodyTemplate} align="center" sortable style={{ minWidth: '8rem' }} />
-          <Column field="created_at" header="Dibuat" body={(r: Pasien) => formatDateSystem(r.created_at)} align="center" sortable style={{ minWidth: '12rem' }} />
-          <Column header="Aksi" body={actionBodyTemplate} align="center" frozen alignFrozen="right" style={{ minWidth: '10rem' }} />
+          <Column field="no_rm" header="No. RM" body={noRmBodyTemplate} align="center" sortable style={{ width: '130px', minWidth: '130px', whiteSpace: 'nowrap' }} />
+          <Column field="nama" header="Nama Pasien" className="font-bold text-900" sortable style={{ width: '200px', minWidth: '200px', whiteSpace: 'nowrap' }} />
+          <Column field="nik" header="NIK" align="center" style={{ width: '160px', minWidth: '160px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap' }}>{r.nik || '-'}</span>} />
+          <Column field="no_hp" header="No. HP" align="center" style={{ width: '140px', minWidth: '140px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap' }}>{r.no_hp || '-'}</span>} />
+          <Column field="tanggal_lahir" header="Tgl Lahir" align="center" style={{ width: '120px', minWidth: '120px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap' }}>{r.tanggal_lahir ? r.tanggal_lahir.split('T')[0] : '-'}</span>} />
+          <Column header="L/P" body={jenisKelaminBodyTemplate} align="center" style={{ width: '100px', minWidth: '100px', whiteSpace: 'nowrap' }} />
+          <Column field="kota_kabupaten" header="Kota / Alamat" style={{ width: '280px', minWidth: '280px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.kota_kabupaten || r.provinsi || '-'}>{r.kota_kabupaten || r.provinsi || '-'}</span>} />
+          <Column field="status" header="Status" body={statusBodyTemplate} align="center" sortable style={{ width: '110px', minWidth: '110px', whiteSpace: 'nowrap' }} />
+          <Column field="created_at" header="Dibuat" body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap' }}>{formatDateSystem(r.created_at)}</span>} align="center" sortable style={{ width: '160px', minWidth: '160px', whiteSpace: 'nowrap' }} />
+          <Column header="Aksi" body={actionBodyTemplate} align="center" frozen alignFrozen="right" style={{ width: '100px', minWidth: '100px', whiteSpace: 'nowrap' }} />
         </DataTable>
       </div>
     </>

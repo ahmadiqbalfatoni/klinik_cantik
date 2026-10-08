@@ -20,6 +20,7 @@ import formUpload from '@/lib/axios/formData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { DialogCheckinBooking } from './DialogCheckinBooking';
 import { DialogDetailBooking } from './DialogDetailBooking';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 import {
   CalendarCheck,
   Plus,
@@ -446,60 +447,55 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate, r
       </div>
 
       {/* Legenda warna status */}
-      <div className="flex flex-wrap align-items-center gap-3 px-1 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-        <span className="flex align-items-center gap-1">
-          <i className="pi pi-info-circle" />
-          <span className="font-semibold">KETERANGAN STATUS:</span>
-        </span>
-        <span
-          className={`flex align-items-center gap-1 cursor-pointer transition-colors ${filterStatus === 'dikonfirmasi' ? 'font-bold text-900' : 'hover:text-900'}`}
-          onClick={() => {
-            setFilterStatus(filterStatus === 'dikonfirmasi' ? '' : 'dikonfirmasi');
-            setPage(1);
-            setFirst(0);
-          }}
-          title="Klik untuk filter Dikonfirmasi"
-        >
-          <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#3b82f6', boxShadow: '0 1px 3px #3b82f655' }} />
-          Dikonfirmasi
-        </span>
-        <span
-          className={`flex align-items-center gap-1 cursor-pointer transition-colors ${filterStatus === 'selesai' ? 'font-bold text-900' : 'hover:text-900'}`}
-          onClick={() => {
-            setFilterStatus(filterStatus === 'selesai' ? '' : 'selesai');
-            setPage(1);
-            setFirst(0);
-          }}
-          title="Klik untuk filter Selesai Check-in"
-        >
-          <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#22c55e', boxShadow: '0 1px 3px #22c55e55' }} />
-          Selesai Check-in
-        </span>
-        <span
-          className={`flex align-items-center gap-1 cursor-pointer transition-colors ${filterStatus === 'tidak_hadir' ? 'font-bold text-900' : 'hover:text-900'}`}
-          onClick={() => {
-            setFilterStatus(filterStatus === 'tidak_hadir' ? '' : 'tidak_hadir');
-            setPage(1);
-            setFirst(0);
-          }}
-          title="Klik untuk filter Tidak Hadir"
-        >
-          <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#f59e0b', boxShadow: '0 1px 3px #f59e0b55' }} />
-          Tidak Hadir
-        </span>
-        <span
-          className={`flex align-items-center gap-1 cursor-pointer transition-colors ${filterStatus === 'dibatalkan' ? 'font-bold text-900' : 'hover:text-900'}`}
-          onClick={() => {
-            setFilterStatus(filterStatus === 'dibatalkan' ? '' : 'dibatalkan');
-            setPage(1);
-            setFirst(0);
-          }}
-          title="Klik untuk filter Dibatalkan"
-        >
-          <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#ef4444', boxShadow: '0 1px 3px #ef444455' }} />
-          Dibatalkan
-        </span>
-      </div>
+      <KeteranganStatus
+        className="mb-2"
+        items={[
+          {
+            label: 'Dikonfirmasi',
+            color: '#3b82f6',
+            active: filterStatus === 'dikonfirmasi',
+            onClick: () => {
+              setFilterStatus(filterStatus === 'dikonfirmasi' ? '' : 'dikonfirmasi');
+              setPage(1);
+              setFirst(0);
+            },
+            title: 'Klik untuk filter Dikonfirmasi',
+          },
+          {
+            label: 'Selesai Check-in',
+            color: '#22c55e',
+            active: filterStatus === 'selesai',
+            onClick: () => {
+              setFilterStatus(filterStatus === 'selesai' ? '' : 'selesai');
+              setPage(1);
+              setFirst(0);
+            },
+            title: 'Klik untuk filter Selesai Check-in',
+          },
+          {
+            label: 'Tidak Hadir',
+            color: '#f59e0b',
+            active: filterStatus === 'tidak_hadir',
+            onClick: () => {
+              setFilterStatus(filterStatus === 'tidak_hadir' ? '' : 'tidak_hadir');
+              setPage(1);
+              setFirst(0);
+            },
+            title: 'Klik untuk filter Tidak Hadir',
+          },
+          {
+            label: 'Dibatalkan',
+            color: '#ef4444',
+            active: filterStatus === 'dibatalkan',
+            onClick: () => {
+              setFilterStatus(filterStatus === 'dibatalkan' ? '' : 'dibatalkan');
+              setPage(1);
+              setFirst(0);
+            },
+            title: 'Klik untuk filter Dibatalkan',
+          },
+        ]}
+      />
     </div>
   );
 

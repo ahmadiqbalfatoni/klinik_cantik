@@ -395,6 +395,7 @@ export const LaporanRekamMedisView: React.FC = () => {
           value={records}
           loading={loadingRecords}
           scrollable
+          tableStyle={{ minWidth: '950px', maxWidth: '1100px' }}
           paginator
           rows={10}
           rowsPerPageOptions={[10, 25, 50, 100]}

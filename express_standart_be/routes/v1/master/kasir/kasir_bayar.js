@@ -1,14 +1,15 @@
 /**
  * @project Sistem Klinik Kecantikan
  * @file kasir_bayar.js
- * @description Endpoint proses bayar - ubah status draft menjadi lunas dan kurangi stok produk yang terjual
+ * @description Endpoint proses bayar - ubah status draft menjadi lunas dan eksekusi pemotongan stok FEFO
  */
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem, getJakartaYmdNow } from "../../components/tools/date_tools.js";
-import { Logging, ChangesLog } from "../../components/tools/servertool.js";
+import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
+import { deductStockFEFO } from "../inventori/batch_helper.js";
 
 const router = express.Router();
 
@@ -28,19 +29,24 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ status: status.BAD_REQUEST, message: "Metode bayar tidak valid", datetime: formatDateSystem() });
   }
 
+  const trx = await DB.transaction();
+
   try {
-    let qExisting = DB("trx_transaksi").where("kode_transaksi", kode_transaksi);
+    let qExisting = trx("trx_transaksi").where("kode_transaksi", kode_transaksi);
     if (branchCode) {
       qExisting = qExisting.andWhere("kode_cabang", branchCode);
     }
-    const existing = await qExisting.first();
+    const existing = await qExisting.forUpdate().first();
     if (!existing) {
+      await trx.rollback();
       return res.status(404).json({ status: status.BAD_REQUEST, message: "Transaksi tidak ditemukan", datetime: formatDateSystem() });
     }
     if (existing.status === "lunas") {
+      await trx.rollback();
       return res.status(400).json({ status: status.BAD_REQUEST, message: "Transaksi sudah lunas", datetime: formatDateSystem() });
     }
     if (existing.status === "batal") {
+      await trx.rollback();
       return res.status(400).json({ status: status.BAD_REQUEST, message: "Transaksi sudah dibatalkan", datetime: formatDateSystem() });
     }
 
@@ -53,142 +59,120 @@ router.post("/", async (req, res) => {
     const nominalBayar = parseFloat(nominal_bayar !== undefined && nominal_bayar !== null ? nominal_bayar : tagihanPelunasan);
 
     if (metode_bayar === "tunai" && nominalBayar < tagihanPelunasan) {
+      await trx.rollback();
       return res.status(400).json({ status: status.BAD_REQUEST, message: `Nominal bayar kurang. Diperlukan: Rp ${tagihanPelunasan.toLocaleString("id-ID")}`, datetime: formatDateSystem() });
     }
 
     const kembalian = metode_bayar === "tunai" ? Math.max(0, nominalBayar - tagihanPelunasan) : 0;
-    const trxCabang = existing.kode_cabang || branchCode || "CBG-001";
-    const nowFormatted = formatDateSystem();
-    const todayStr = getJakartaYmdNow().replace(/-/g, "");
+    const trxBranch = existing.kode_cabang || branchCode || "CBG-001";
 
-    await DB.transaction(async (trx) => {
-      // 1. Update status transaksi menjadi lunas
-      await trx("trx_transaksi").where("kode_transaksi", kode_transaksi).update({
-        metode_bayar,
-        sisa_bayar: tagihanPelunasan,
-        status: "lunas",
-        updated_by: username,
-        updated_at: nowFormatted,
-      });
+    // 1. Eksekusi pemotongan stok FEFO untuk semua item produk fisik pada transaksi
+    const detailItems = await trx("trx_detail_transaksi")
+      .where("kode_transaksi", kode_transaksi)
+      .whereNotNull("kode_produk");
 
-      // 2. Update status kunjungan jika terkait dengan kunjungan pasien
-      if (existing.kode_kunjungan) {
-        await trx("trx_kunjungan").where("kode_kunjungan", existing.kode_kunjungan).update({
-          status: "selesai",
-          updated_by: username,
-          updated_at: nowFormatted,
+    for (const item of detailItems) {
+      if (item.kode_produk && !item.kode_produk.startsWith("CUSTOM-") && !item.kode_produk.startsWith("CST-")) {
+        await deductStockFEFO({
+          kode_produk: item.kode_produk,
+          qty: parseInt(item.qty || 1, 10),
+          kode_transaksi: kode_transaksi,
+          username: username,
+          branchCode: trxBranch,
+          tz: existing.tz || "UTC",
+          allowExpiredOverride: Boolean(item.is_expired_override),
+          catatanOverride: item.catatan_override || null,
+          trx: trx,
         });
       }
+    }
 
-      // 3. Ambil detail transaksi untuk memotong stok produk yang terjual
-      const details = await trx("trx_detail_transaksi").where("kode_transaksi", kode_transaksi);
+    // 2. Update status transaksi menjadi lunas
+    await trx("trx_transaksi").where("kode_transaksi", kode_transaksi).update({
+      metode_bayar,
+      sisa_bayar: tagihanPelunasan,
+      status: "lunas",
+      updated_by: username,
+      updated_at: DB.fn.now(),
+    });
 
-      // Kumpulkan akumulasi kuantitas per kode_produk
-      const productDeductions = new Map(); // key: kode_produk, value: qty
-
-      for (const item of details) {
-        const qty = Math.max(1, parseInt(item.qty || 1, 10));
-
-        // a. Produk satuan langsung
-        if (item.kode_produk && !item.kode_produk.startsWith("CUSTOM-") && !item.kode_produk.startsWith("CST-")) {
-          const cur = productDeductions.get(item.kode_produk) || 0;
-          productDeductions.set(item.kode_produk, cur + qty);
-        }
-
-        // b. Paket produk (jika ada kode_layanan atau kode_produk yang merujuk ke mst_paket_produk)
-        const pktCode = (item.kode_layanan || "").startsWith("PKTPRD-")
-          ? item.kode_layanan
-          : (item.kode_produk || "").startsWith("PKTPRD-")
-          ? item.kode_produk
-          : null;
-
-        if (pktCode) {
-          const pktDetails = await trx("mst_detail_paket_produk").where("kode_paket_produk", pktCode);
-          for (const pd of pktDetails) {
-            if (pd.kode_produk) {
-              const compQty = qty * Math.max(1, parseInt(pd.jumlah || 1, 10));
-              const cur = productDeductions.get(pd.kode_produk) || 0;
-              productDeductions.set(pd.kode_produk, cur + compQty);
-            }
-          }
-        }
-      }
-
-      // Cari sequence kode_stok_movement terakhir hari ini
-      const lastMov = await trx("trx_stok_movement")
-        .where("kode_stok_movement", "like", `MOV-${todayStr}-%`)
-        .orderBy("id", "desc")
+    // 2b. Integrasi Sesi Shift Kasir: Catat ke shift aktif kasir jika ada
+    try {
+      const userCode = req?.auth?.user_code || "";
+      const activeShift = await trx("trx_kasir_shift")
+        .where(function () {
+          if (userCode) this.where("user_code", userCode);
+          else this.where("created_by", username);
+        })
+        .where("status", "open")
+        .forUpdate()
         .first();
 
-      let nextMovSeq = 1;
-      if (lastMov && lastMov.kode_stok_movement) {
-        const parts = lastMov.kode_stok_movement.split("-");
-        const num = parseInt(parts[parts.length - 1], 10);
-        if (!isNaN(num)) nextMovSeq = num + 1;
-      }
+      if (activeShift) {
+        const nowWib = formatDateSystem();
+        const payNominal = tagihanPelunasan > 0 ? tagihanPelunasan : totalBayar;
 
-      // Potong stok di mst_produk dan catat di trx_stok_movement
-      for (const [kodeProduk, qtyKeluar] of productDeductions.entries()) {
-        let qProd = trx("mst_produk").where("kode_produk", kodeProduk);
-        if (trxCabang) {
-          qProd = qProd.andWhere(function () {
-            this.where("kode_cabang", trxCabang).orWhereNull("kode_cabang");
-          });
-        }
-        const produk = await qProd.first();
+        if (metode_bayar === "tunai") {
+          const newTunai = parseFloat(activeShift.total_penjualan_tunai || 0) + payNominal;
+          const newKasDiharapkan = parseFloat(activeShift.kas_diharapkan || 0) + payNominal;
 
-        if (produk) {
-          const stokSebelum = parseInt(produk.stok_tersedia || 0, 10);
-          const stokSesudah = Math.max(0, stokSebelum - qtyKeluar);
-
-          await trx("mst_produk").where("id", produk.id).update({
-            stok_tersedia: stokSesudah,
+          await trx("trx_kasir_shift").where("id", activeShift.id).update({
+            total_penjualan_tunai: newTunai,
+            kas_diharapkan: newKasDiharapkan,
             updated_by: username,
-            updated_at: nowFormatted,
+            updated_at: DB.fn.now(),
           });
 
-          const kodeMovement = `MOV-${todayStr}-${String(nextMovSeq).padStart(3, "0")}`;
-          nextMovSeq++;
+          const countMut = await trx("trx_kasir_mutasi_kas")
+            .where("kode_shift", activeShift.kode_shift)
+            .count("id as total")
+            .first();
+          const nextMutSeq = (parseInt(countMut?.total || 0, 10) + 1).toString().padStart(3, "0");
+          const kodeMutasi = `MUT-${activeShift.kode_shift.replace("SFT-", "")}-${nextMutSeq}`;
 
-          const oMovement = {
-            kode_cabang: trxCabang,
-            kode_stok_movement: kodeMovement,
-            kode_produk: kodeProduk,
-            jenis_movement: "keluar",
+          await trx("trx_kasir_mutasi_kas").insert({
+            kode_mutasi: kodeMutasi,
+            kode_shift: activeShift.kode_shift,
+            user_code: activeShift.user_code,
+            nama_kasir: activeShift.nama_kasir,
+            kode_cabang: activeShift.kode_cabang,
+            tipe: "penjualan_tunai",
+            kategori: `Penjualan Tunai (${kode_transaksi})`,
+            nominal: payNominal,
+            arus: "masuk",
+            saldo_setelah: newKasDiharapkan,
             referensi: kode_transaksi,
-            qty: qtyKeluar,
-            stok_sebelum: stokSebelum,
-            stok_sesudah: stokSesudah,
-            tanggal: nowFormatted,
-            tz: "Asia/Jakarta",
+            keterangan: `Pembayaran tunai transaksi ${kode_transaksi}`,
             created_by: username,
-            created_at: nowFormatted,
+            created_at: nowWib,
+          });
+        } else {
+          const newNonTunai = parseFloat(activeShift.total_penjualan_nontunai || 0) + payNominal;
+          await trx("trx_kasir_shift").where("id", activeShift.id).update({
+            total_penjualan_nontunai: newNonTunai,
             updated_by: username,
-            updated_at: nowFormatted,
-          };
-
-          await trx("trx_stok_movement").insert(oMovement);
-
-          await ChangesLog(
-            {
-              description: `Penjualan Kasir ${kode_transaksi}: Produk ${kodeProduk} (${produk.nama || ''}) keluar -${qtyKeluar} (stok: ${stokSebelum} -> ${stokSesudah})`,
-              tableName: "mst_produk",
-              referenceCode: kodeProduk,
-              action: "UPDATE",
-              dataBefore: { stok_tersedia: stokSebelum },
-              dataAfter: { stok_tersedia: stokSesudah, kode_transaksi, qty: qtyKeluar },
-              user: username,
-              tz: "Asia/Jakarta",
-            },
-            trx
-          );
+            updated_at: DB.fn.now(),
+          });
         }
       }
-    });
+    } catch (shiftErr) {
+      console.warn("Peringatan: Gagal mencatat mutasi shift kasir:", shiftErr?.message);
+    }
+
+    // 3. Update kunjungan pasien menjadi selesai jika ada
+    if (existing.kode_kunjungan) {
+      await trx("trx_kunjungan").where("kode_kunjungan", existing.kode_kunjungan).update({
+        status: "selesai",
+        updated_by: username,
+        updated_at: DB.fn.now(),
+      });
+    }
+
+    await trx.commit();
 
     return res.status(200).json({
       status: status.SUKSES,
-      message: "Pembayaran berhasil dan stok produk telah diperbarui",
+      message: "Pembayaran berhasil dan stok produk telah dipotong (FEFO)",
       datetime: formatDateSystem(),
       data: {
         kode_transaksi,
@@ -206,9 +190,10 @@ router.post("/", async (req, res) => {
       },
     });
   } catch (error) {
+    await trx.rollback();
     const oResult = {
       status: status.BAD_REQUEST,
-      message: "Sistem sedang maintenance harap tunggu sebentar",
+      message: error.message || "Sistem sedang maintenance harap tunggu sebentar",
       datetime: formatDateSystem(),
     };
     Logging(error, { file: "/master/kasir/kasir_bayar.js", user: username });

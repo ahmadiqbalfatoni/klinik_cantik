@@ -17,6 +17,7 @@ import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 interface SubMenuItem {
     label: string;
@@ -63,7 +64,6 @@ const DEFAULT_MASTER_MENU: MenuGroup[] = [
             { label: 'Kategori Produk', icon: 'pi pi-fw pi-tags', to: '/master-data/kategori-produk' },
             { label: 'Data Produk', icon: 'pi pi-fw pi-box', to: '/master-data/produk' },
             { label: 'Paket Produk', icon: 'pi pi-fw pi-inbox', to: '/master-data/paket-produk' },
-            { label: 'Inventori', icon: 'pi pi-fw pi-box', to: '/master-data/inventori' },
             { label: 'Supplier', icon: 'pi pi-fw pi-truck', to: '/master-data/supplier' },
             { label: 'Karyawan', icon: 'pi pi-fw pi-users', to: '/master-data/karyawan' },
             { label: 'Jadwal Karyawan', icon: 'pi pi-fw pi-calendar-times', to: '/master-data/jadwal-karyawan' },
@@ -93,10 +93,12 @@ const DEFAULT_MASTER_MENU: MenuGroup[] = [
         ]
     },
     {
-        label: 'KASIR',
+        label: 'TRANSAKSI',
         icon: 'pi pi-fw pi-calculator',
         items: [
-            { label: 'Kasir', icon: 'pi pi-fw pi-calculator', to: '/kasir' }
+            { label: 'Kasir', icon: 'pi pi-fw pi-calculator', to: '/kasir' },
+            { label: 'Inventori', icon: 'pi pi-fw pi-box', to: '/master-data/inventori' },
+            { label: 'Tracking Kas Kasir', icon: 'pi pi-fw pi-wallet', to: '/transaksi/tracking-kasir' }
         ]
     },
     {
@@ -166,6 +168,7 @@ const DEFAULT_ROLES: RoleItem[] = [
             '/pendaftaran-antrean/antrean?type=konsul',
             '/pendaftaran-antrean/jadwal-karyawan',
             '/kasir',
+            '/transaksi/tracking-kasir',
             '/riwayat/rekam-medis',
             '/setup/config',
             '/setup/users',
@@ -288,6 +291,7 @@ const DEFAULT_ROLES: RoleItem[] = [
             '/pendaftaran-antrean/pendaftaran-pasien',
             '/master-data-user/data-pasien',
             '/pendaftaran-antrean/jadwal-karyawan',
+            '/transaksi/tracking-kasir',
         ],
         is_custom: false,
     },
@@ -847,38 +851,7 @@ export default function ManajemenMenuRolePage() {
                                     />
                                 </div>
                             </div>
-                            <div className="flex flex-wrap align-items-center gap-3 px-1 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                                <span className="flex align-items-center gap-1">
-                                    <i className="pi pi-info-circle" />
-                                    <span className="font-semibold">KETERANGAN STATUS:</span>
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span
-                                        style={{
-                                            display: 'inline-block',
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '3px',
-                                            backgroundColor: '#22c55e',
-                                            boxShadow: '0 1px 3px #22c55e55',
-                                        }}
-                                    />
-                                    Aktif
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span
-                                        style={{
-                                            display: 'inline-block',
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '3px',
-                                            backgroundColor: '#ef4444',
-                                            boxShadow: '0 1px 3px #ef444455',
-                                        }}
-                                    />
-                                    Tidak Aktif
-                                </span>
-                            </div>
+                            <KeteranganStatus className="mb-2" />
                         </div>
                     }
                 >

@@ -115,11 +115,16 @@ router.post("/", upload.any(), async (req, res) => {
       else if (oPayload.hapus_foto === true || oPayload.hapus_foto === "true" || oPayload.hapus_foto === "1" || oPayload.hapus_foto === 1) {
         finalFotoFilename = null;
       }
+      const isIncludeKonsul = oPayload.is_include_konsultasi !== undefined
+        ? (oPayload.is_include_konsultasi === 1 || oPayload.is_include_konsultasi === "1" || oPayload.is_include_konsultasi === true || oPayload.is_include_konsultasi === "true" ? 1 : 0)
+        : (prevRecord.is_include_konsultasi || 0);
+
       const oData = {
         kode_kategori_layanan: oPayload.kode_kategori_layanan,
         kode_ruangan: oPayload.kode_ruangan || null,
         wajib_konsultasi: wajibKonsul,
         kode_ruangan_konsultasi: wajibKonsul !== "tidak" ? (oPayload.kode_ruangan_konsultasi || null) : null,
+        is_include_konsultasi: isIncludeKonsul,
         nama: oPayload.nama,
         tipe: tipe,
         harga: oPayload.harga,

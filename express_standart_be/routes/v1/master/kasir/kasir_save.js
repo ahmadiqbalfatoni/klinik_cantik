@@ -9,6 +9,7 @@ import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
+import { validateStockAvailability } from "../inventori/batch_helper.js";
 
 const router = express.Router();
 
@@ -54,6 +55,43 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ status: status.BAD_REQUEST, message: "Minimal 1 item transaksi", datetime: formatDateSystem() });
   }
 
+  const currentBranch = getBranchScope(req, body.kode_cabang) || "CBG-001";
+  const userRole = (req?.auth?.role || "").toLowerCase();
+  const AUTHORIZED_OVERRIDE_ROLES = [
+    "owner",
+    "manager",
+    "superadmin",
+    "admin",
+    "dokter",
+    "kasir",
+    "supervisor",
+    "apoteker",
+    "dev",
+  ];
+
+  // Validasi otorisasi jika ada item yang meminta override kadaluarsa
+  const hasOverrideRequest = items.some((it) => it.is_expired_override || it.produk_expired_override);
+  if (hasOverrideRequest) {
+    const isAuthorized = userRole && AUTHORIZED_OVERRIDE_ROLES.includes(userRole);
+    if (!isAuthorized) {
+      return res.status(403).json({
+        status: status.GAGAL || "01",
+        message: "Akses ditolak: Anda tidak memiliki otorisasi (role) untuk melakukan override produk kadaluarsa.",
+        datetime: formatDateSystem(),
+      });
+    }
+  }
+
+  // Validasi ketersediaan stok fisik produk (Early Validation)
+  const stockCheck = await validateStockAvailability(items, currentBranch);
+  if (!stockCheck.valid) {
+    return res.status(400).json({
+      status: status.BAD_REQUEST,
+      message: stockCheck.message,
+      datetime: formatDateSystem(),
+    });
+  }
+
   const trx = await DB.transaction();
   try {
     // 1. Hitung total_harga & diskon dari items jika ada snapshot
@@ -61,21 +99,31 @@ router.post("/", async (req, res) => {
     let total_diskon_from_items = 0;
     items.forEach((item) => {
       const qty = parseInt(item.qty || 1);
-      const subtotalItem = parseFloat(item.harga_satuan || 0) * qty;
+      const isIncludeTreatment = item.is_free_include || item.jenis_diskon === "include_treatment";
+      const rawPrice = parseFloat(item.harga_satuan || 0);
+      const subtotalItem = isIncludeTreatment ? 0 : (item.subtotal !== undefined ? parseFloat(item.subtotal) : rawPrice * qty);
       total_harga += subtotalItem;
-      const isLayanan = Boolean(item.is_from_pendaftaran) || item.jenis === "layanan" || item.jenis === "paket";
-      if (!isLayanan) {
-        let dVal = parseFloat(item.diskon || 0);
-        if (dVal === 0 && item.nilai_diskon && parseFloat(item.nilai_diskon) > 0) {
-          const nDisc = parseFloat(item.nilai_diskon);
-          dVal = item.jenis_diskon === "nominal" ? Math.min(nDisc * qty, subtotalItem) : (subtotalItem * nDisc) / 100;
-          item.diskon = dVal;
-          item.subtotal_setelah_diskon = Math.max(0, subtotalItem - dVal);
-        }
+
+      let dVal = parseFloat(item.diskon || 0);
+      if (isIncludeTreatment) {
+        item.diskon = 0;
+        item.harga_satuan = 0;
+        item.subtotal = 0;
+        item.subtotal_setelah_diskon = 0;
+        item.kode_promo = null;
+        item.nama_promo = "Gratis (Include Tindakan)";
+        item.jenis_diskon = "include_treatment";
+        item.nilai_diskon = 0;
+      } else if (dVal === 0 && item.nilai_diskon && parseFloat(item.nilai_diskon) > 0) {
+        const nDisc = parseFloat(item.nilai_diskon);
+        dVal = item.jenis_diskon === "nominal" ? Math.min(nDisc * qty, subtotalItem) : (subtotalItem * nDisc) / 100;
+        item.diskon = dVal;
+        item.subtotal_setelah_diskon = Math.max(0, subtotalItem - dVal);
         total_diskon_from_items += dVal;
       } else {
-        item.diskon = 0;
-        item.subtotal_setelah_diskon = subtotalItem;
+        item.diskon = dVal;
+        item.subtotal_setelah_diskon = Math.max(0, subtotalItem - dVal);
+        total_diskon_from_items += dVal;
       }
     });
 
@@ -278,6 +326,9 @@ router.post("/", async (req, res) => {
       const kode_detail = `DT-${today}-${String(dtSeq).padStart(3, "0")}`;
       dtSeq++;
 
+      const isOverride = Boolean(item.is_expired_override || item.produk_expired_override) ? 1 : 0;
+      const catatanOverride = item.catatan_override || (isOverride ? (item.catatan || "Disetujui kasir/petugas") : null);
+
       const detailRow = {
         kode_cabang: currentTrxCabang,
         kode_detail_transaksi: kode_detail,
@@ -288,6 +339,8 @@ router.post("/", async (req, res) => {
         harga_satuan,
         subtotal,
         is_from_pendaftaran: isLayanan ? 1 : 0,
+        is_expired_override: isOverride,
+        catatan_override: catatanOverride,
         tz,
         created_by: username,
         created_at: DB.fn.now(),

@@ -176,7 +176,13 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
   // 6. Dialog Jadwal Mingguan Ruangan
   const [showJadwalRuanganDialog, setShowJadwalRuanganDialog] = useState(false);
   const [jadwalDialogRooms, setJadwalDialogRooms] = useState<RoomTabOption[]>([]);
-  const [consultRoomInfo, setConsultRoomInfo] = useState<{ kode_ruangan: string; nama_ruangan: string } | null>(null);
+  const [consultRoomInfo, setConsultRoomInfo] = useState<{
+    kode_ruangan: string;
+    nama_ruangan: string;
+    kode_layanan?: string;
+    nama_layanan?: string;
+    harga_konsultasi?: number;
+  } | null>(null);
 
   // 7. Popover Pendamping
   const companionOpRef = useRef<OverlayPanel>(null);
@@ -508,7 +514,6 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
   };
 
   const selectedList = Object.values(selectedMap);
-  const totalHarga = selectedList.reduce((acc, curr) => acc + (curr.jenis === 'klaim_paket' ? 0 : (curr.harga || 0)), 0);
   const totalDurasi = selectedList.reduce((acc, curr) => acc + (curr.durasi_menit || 0), 0);
 
   const activeRoomName = useMemo(() => {
@@ -537,6 +542,42 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
     if (hasOpsionalKonsul) return globalConsultChoice;
     return false;
   }, [hasWajibKonsul, hasOpsionalKonsul, globalConsultChoice]);
+
+  // Cek apakah tindakan yang butuh konsultasi bertipe INCLUDE KONSULTASI
+  const isActionIncludeKonsul = useMemo(() => {
+    const consultNeeding = selectedList.filter((item) => {
+      const { isWajib, isOpsional } = getItemConsultType(item);
+      return isWajib || (isOpsional && globalConsultChoice);
+    });
+    if (consultNeeding.length === 0) return false;
+    return consultNeeding.every((item) =>
+      Boolean(item.is_include_konsultasi === 1 || item.is_include_konsultasi === '1' || item.is_include_konsultasi === true)
+    );
+  }, [selectedList, globalConsultChoice]);
+
+  const effectiveHargaKonsulMaster = useMemo(() => {
+    const itemWithConsultPrice = selectedList.find(
+      (it) => typeof it.harga_konsultasi === 'number' && it.harga_konsultasi > 0
+    );
+    if (itemWithConsultPrice && itemWithConsultPrice.harga_konsultasi) {
+      return itemWithConsultPrice.harga_konsultasi;
+    }
+    if (consultRoomInfo?.harga_konsultasi) {
+      return parseFloat(String(consultRoomInfo.harga_konsultasi));
+    }
+    return 15000;
+  }, [selectedList, consultRoomInfo?.harga_konsultasi]);
+
+  const biayaKonsultasi = useMemo(() => {
+    if (!effectiveButuhKonsul) return 0;
+    if (isActionIncludeKonsul) return 0;
+    return effectiveHargaKonsulMaster;
+  }, [effectiveButuhKonsul, isActionIncludeKonsul, effectiveHargaKonsulMaster]);
+
+  const totalHarga = useMemo(() => {
+    const totalTindakan = selectedList.reduce((acc, curr) => acc + (curr.jenis === 'klaim_paket' ? 0 : (curr.harga || 0)), 0);
+    return totalTindakan + biayaKonsultasi;
+  }, [selectedList, biayaKonsultasi]);
 
   // Status Dokter Jaga di Ruang Konsultasi untuk Registrasi Walk-In Hari Ini
   const consultDoctorStatus = useMemo(() => {
@@ -569,7 +610,7 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
 
       if (startM < earliestStartMin) earliestStartMin = startM;
       if (endM > latestEndMin) latestEndMin = endM;
-      if (nowMin < endM) {
+      if (nowMin >= startM && nowMin < endM) {
         hasAvailableNow = true;
       }
 
@@ -835,19 +876,17 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
           setGlobalConsultChoice(true);
         }
 
-        // Auto-select consult slot yang sedang aktif / bertugas saat ini atau sesi hari ini
+        // Auto-select consult slot yang sedang aktif / bertugas saat ini
         if (groupedConsult.length > 0) {
-          const avail = groupedConsult.find((s) => s.is_available && !s.is_past_today && !s.is_not_started_today)
-            || groupedConsult.find((s) => s.is_available && !s.is_past_today);
+          const avail = groupedConsult.find((s) => s.is_available && !s.is_past_today && !s.is_not_started_today);
           setSelectedConsultSlot(avail || null);
         } else {
           setSelectedConsultSlot(null);
         }
 
-        // Auto-select slot tindakan yang sedang aktif / bertugas saat ini atau sesi hari ini
+        // Auto-select slot tindakan yang sedang aktif / bertugas saat ini
         if (grouped.length > 0) {
-          const avail = grouped.find((s) => s.is_available && !s.is_past_today && !s.is_not_started_today)
-            || grouped.find((s) => s.is_available && !s.is_past_today);
+          const avail = grouped.find((s) => s.is_available && !s.is_past_today && !s.is_not_started_today);
           setSelectedSlot(avail || null);
         } else {
           setSelectedSlot(null);
@@ -879,7 +918,14 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
       return;
     }
     if (!selectedSlot) {
-      showError(toast, 'Harap pilih slot jadwal sesi petugas di Langkah 3');
+      showError(toast, 'Harap pilih slot jadwal sesi petugas yang sedang aktif di Langkah 3');
+      return;
+    }
+    if (selectedSlot.is_not_started_today) {
+      showError(
+        toast,
+        `Sesi petugas di ${activeRoomName || 'Ruang Tindakan'} (${selectedSlot.nama_petugas}) baru dimulai pukul ${selectedSlot.jam_mulai} WIB. Pendaftaran walk-in langsung hanya dapat dilakukan saat sesi telah aktif.`
+      );
       return;
     }
     if (selectedSlot.is_past_today) {
@@ -892,7 +938,14 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
 
     if (effectiveButuhKonsul) {
       if (!selectedConsultSlot) {
-        showError(toast, 'Harap pilih sesi dokter di Ruang Konsultasi');
+        showError(toast, 'Harap pilih sesi dokter di Ruang Konsultasi yang sedang aktif');
+        return;
+      }
+      if (selectedConsultSlot.is_not_started_today) {
+        showError(
+          toast,
+          `Dokter di ${consultRoomInfo?.nama_ruangan || 'Ruang Konsultasi'} (${selectedConsultSlot.nama_petugas}) baru bertugas pukul ${selectedConsultSlot.jam_mulai} WIB.`
+        );
         return;
       }
       if (selectedConsultSlot.is_past_today) {
@@ -1476,6 +1529,11 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                             nama_pasien_booking_terdekat: item.nama_pasien_booking_terdekat || ruang.nama_pasien_booking_terdekat,
                           };
 
+                          const isRuanganKonsultasi = Boolean(
+                            ruang.is_konsultasi === 1 ||
+                            ruang.nama_ruangan?.toLowerCase().includes('konsultasi')
+                          );
+
                           return (
                             <LayananCard
                               key={itemKey}
@@ -1483,6 +1541,8 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                               isSelected={!!selectedMap[itemKey]}
                               isDisabled={isRuangDisabled || isClaimedElsewhere || isCapacityLocked}
                               isClaimedElsewhere={isClaimedElsewhere}
+                              isRuanganKonsultasi={isRuanganKonsultasi}
+                              hargaKonsultasi={consultRoomInfo?.harga_konsultasi}
                               onToggle={handleToggleItem}
                               formatPrice={formatCurrency}
                             />
@@ -1745,7 +1805,7 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                   const isQuotaFull = (cSlot.sisa_kuota ?? 0) <= 0;
                   const isShiftPast = Boolean(cSlot.is_past_today);
                   const isNotStarted = Boolean(cSlot.is_not_started_today);
-                  const isUnavailable = isQuotaFull || isShiftPast || !cSlot.is_available;
+                  const isUnavailable = isQuotaFull || isShiftPast || isNotStarted || !cSlot.is_available;
                   const companions = cSlot.petugas_pendamping || [];
                   const totalCompanions = cSlot.jumlah_pendamping || companions.length;
                   const hasCompanions = totalCompanions > 0;
@@ -1792,10 +1852,10 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                               />
                             ) : isNotStarted ? (
                               <Tag
-                                value="SESI MENDATANG"
-                                severity="info"
+                                value="BELUM MULAI"
+                                severity="warning"
                                 className="text-xs px-2 py-0.5 font-bold flex-shrink-0"
-                                title={`Sesi praktek dokter dimulai pukul ${cSlot.jam_mulai} WIB`}
+                                title={`Sesi praktek dokter baru dimulai pukul ${cSlot.jam_mulai} WIB`}
                               />
                             ) : !cSlot.is_available ? (
                               <Tag
@@ -1899,7 +1959,7 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                 const isQuotaFull = (slot.sisa_kuota ?? 0) <= 0;
                 const isShiftPast = Boolean(slot.is_past_today);
                 const isNotStarted = Boolean(slot.is_not_started_today);
-                const isUnavailable = isQuotaFull || isShiftPast || !slot.is_available;
+                const isUnavailable = isQuotaFull || isShiftPast || isNotStarted || !slot.is_available;
                 const companions = slot.petugas_pendamping || [];
                 const totalCompanions = slot.jumlah_pendamping || companions.length;
                 const hasCompanions = totalCompanions > 0;
@@ -1946,10 +2006,10 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                             />
                           ) : isNotStarted ? (
                             <Tag
-                              value="SESI MENDATANG"
-                              severity="info"
+                              value="BELUM MULAI"
+                              severity="warning"
                               className="text-xs px-2 py-0.5 font-bold flex-shrink-0"
-                              title={`Sesi praktek dimulai pukul ${slot.jam_mulai} WIB`}
+                              title={`Sesi praktek baru dimulai pukul ${slot.jam_mulai} WIB`}
                             />
                           ) : !slot.is_available ? (
                             <Tag
@@ -2077,17 +2137,28 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                 <span className="text-500">Petugas:</span>
                 <strong className="text-900">{selectedSlot?.nama_petugas || '-'}</strong>
               </span>
+              {effectiveButuhKonsul && (
+                <>
+                  <span className="text-300 select-none">•</span>
+                  <span className="inline-flex align-items-center gap-1">
+                    <span className="text-500">Konsultasi Dokter:</span>
+                    <strong className={isActionIncludeKonsul ? "text-emerald-600 font-bold" : "text-amber-700 font-bold"}>
+                      {isActionIncludeKonsul ? 'Gratis (Include)' : formatCurrency(biayaKonsultasi)}
+                    </strong>
+                  </span>
+                </>
+              )}
               <span className="text-300 select-none">•</span>
               <span className="inline-flex align-items-center gap-1">
-                <span className="text-500">Total:</span>
+                <span className="text-500">Total Biaya:</span>
                 <strong className="text-emerald-700 font-bold">{formatCurrency(totalHarga)}</strong>
               </span>
             </div>
           </div>
 
           {(() => {
-            const isSelectedSlotUnavailable = !selectedSlot || Boolean(selectedSlot.is_past_today) || (selectedSlot.sisa_kuota ?? 0) <= 0 || !selectedSlot.is_available;
-            const isSelectedConsultSlotUnavailable = effectiveButuhKonsul && (!selectedConsultSlot || Boolean(selectedConsultSlot.is_past_today) || (selectedConsultSlot.sisa_kuota ?? 0) <= 0 || !selectedConsultSlot.is_available);
+            const isSelectedSlotUnavailable = !selectedSlot || Boolean(selectedSlot.is_not_started_today) || Boolean(selectedSlot.is_past_today) || (selectedSlot.sisa_kuota ?? 0) <= 0 || !selectedSlot.is_available;
+            const isSelectedConsultSlotUnavailable = effectiveButuhKonsul && (!selectedConsultSlot || Boolean(selectedConsultSlot.is_not_started_today) || Boolean(selectedConsultSlot.is_past_today) || (selectedConsultSlot.sisa_kuota ?? 0) <= 0 || !selectedConsultSlot.is_available);
             const isSubmitDisabled = !selectedPasien || selectedList.length === 0 || isSelectedSlotUnavailable || isSelectedConsultSlotUnavailable || submitting || isConsultDoctorUnavailable;
 
             return (
@@ -2106,13 +2177,17 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                       : `Tidak dapat mendaftar: Tidak ada jadwal dokter jaga di ${consultRoomInfo?.nama_ruangan || 'Ruang Konsultasi'} hari ini. Alihkan ke Langsung Tindakan atau Booking.`
                     : isSelectedSlotUnavailable
                     ? !selectedSlot
-                      ? `Harap pilih slot jadwal petugas di Langkah 3.`
+                      ? `Harap pilih slot jadwal petugas di Langkah 3 yang sedang aktif.`
+                      : selectedSlot?.is_not_started_today
+                      ? `Tidak dapat mendaftar: Sesi di ${activeRoomName} (${selectedSlot.nama_petugas}) baru dimulai pukul ${selectedSlot.jam_mulai} WIB.`
                       : selectedSlot?.is_past_today
                       ? `Tidak dapat mendaftar: Sesi di ${activeRoomName} (${selectedSlot.nama_petugas}) telah berakhir pukul ${selectedSlot.jam_selesai} WIB.`
                       : `Tidak dapat mendaftar: Slot jadwal di ${activeRoomName} tidak tersedia.`
                     : isSelectedConsultSlotUnavailable
                     ? !selectedConsultSlot
-                      ? `Harap pilih sesi dokter di Ruang Konsultasi.`
+                      ? `Harap pilih sesi dokter di Ruang Konsultasi yang sedang aktif.`
+                      : selectedConsultSlot?.is_not_started_today
+                      ? `Tidak dapat mendaftar: Sesi di ${consultRoomInfo?.nama_ruangan || 'Ruang Konsultasi'} baru dimulai pukul ${selectedConsultSlot.jam_mulai} WIB.`
                       : `Tidak dapat mendaftar: Sesi dokter di ${consultRoomInfo?.nama_ruangan || 'Ruang Konsultasi'} telah selesai hari ini.`
                     : undefined
                 }

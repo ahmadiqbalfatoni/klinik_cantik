@@ -355,12 +355,18 @@ export const StepPilihLayanan: React.FC<Props> = ({
       nama_pasien_booking_terdekat: item.nama_pasien_booking_terdekat || currentRoom?.nama_pasien_booking_terdekat,
     };
 
+    const isRuanganKonsultasi = Boolean(
+      currentRoom?.is_konsultasi === 1 ||
+      currentRoom?.nama_ruangan?.toLowerCase().includes('konsultasi')
+    );
+
     return (
       <LayananCard
         key={key}
         item={itemWithRoomStatus}
         isSelected={isSelected}
         isDisabled={isDisabled}
+        isRuanganKonsultasi={isRuanganKonsultasi}
         onToggle={handleToggleItem}
         formatPrice={formatRupiah}
       />

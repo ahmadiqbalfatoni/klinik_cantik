@@ -1529,7 +1529,7 @@ export const BeauticianView: React.FC<{ data: any; onRefresh: () => void; loadin
                   <div key={idx} className="col-6 p-1">
                     <div className="border-round-lg overflow-hidden border-1 border-200 relative shadow-none">
                       <Image
-                        src={f.url_foto ? (f.url_foto.startsWith('http') ? f.url_foto : (f.url_foto.startsWith('/') ? f.url_foto : `/${f.url_foto}`)) : '/layout/images/placeholder.png'}
+                        src={f.url_foto ? `http://localhost:8000${f.url_foto}` : '/layout/images/placeholder.png'}
                         alt={f.nama_pasien || 'Foto Pasien'}
                         width="100%"
                         height="85"
@@ -1568,12 +1568,9 @@ export const KasirView: React.FC<{ data: any; onRefresh: () => void; loading: bo
   // 1. Chart Data: Komposisi Metode Pembayaran (Doughnut)
   const rawMethods = (metodeBayar && metodeBayar.length > 0)
     ? metodeBayar
-    : [
-        { metode_bayar: 'QRIS', nominal: 3250000, jumlah_trx: 8 },
-        { metode_bayar: 'TUNAI', nominal: 1850000, jumlah_trx: 5 },
-        { metode_bayar: 'DEBIT', nominal: 1200000, jumlah_trx: 3 },
-        { metode_bayar: 'TRANSFER', nominal: 950000, jumlah_trx: 2 },
-      ];
+    : (totalTrx > 0
+        ? [{ metode_bayar: 'TUNAI', nominal: totalBayar, jumlah_trx: totalTrx }]
+        : [{ metode_bayar: 'BELUM ADA TRANSAKSI', nominal: 0, jumlah_trx: 0 }]);
 
   const methodTotal = rawMethods.reduce((sum: number, m: any) => sum + parseFloat(m.nominal || 0), 0);
   const methodPalette = ['#059669', '#0284c7', '#d97706', '#7c3aed', '#e11d48'];
@@ -1623,15 +1620,20 @@ export const KasirView: React.FC<{ data: any; onRefresh: () => void; loading: bo
   };
 
   // 2. Chart Data: Tren Penerimaan Kas Mingguan (Bar Chart)
+  const weeklyLabels = kasir.weekly_trend?.labels || ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+  const weeklyValues = kasir.weekly_trend?.values !== undefined
+    ? kasir.weekly_trend.values
+    : (totalTrx > 0 ? [0, 0, 0, 0, 0, 0, parseFloat((totalBayar / 1000000).toFixed(2))] : [0, 0, 0, 0, 0, 0, 0]);
+
   const kasirWeeklyData = {
-    labels: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
+    labels: weeklyLabels,
     datasets: [
       {
         label: 'Penerimaan Kas (Juta Rp)',
         backgroundColor: '#059669',
         hoverBackgroundColor: '#047857',
         borderRadius: 6,
-        data: [3.8, 5.2, 7.1, 6.4, 8.9, 12.5, 9.2],
+        data: weeklyValues,
         barPercentage: 0.55,
       },
     ],
@@ -1675,7 +1677,7 @@ export const KasirView: React.FC<{ data: any; onRefresh: () => void; loading: bo
           <StatCardRole
             title="Total Penerimaan Hari Ini"
             value={formatRupiah(totalBayar)}
-            subtext="Penerimaan kas bersih seluruh invoice"
+            subtext="Penerimaan transaksi kasir Anda"
             icon="pi pi-wallet"
             iconBg="#ECFDF5"
             iconColor="#047857"
@@ -1687,7 +1689,7 @@ export const KasirView: React.FC<{ data: any; onRefresh: () => void; loading: bo
           <StatCardRole
             title="Total Transaksi Selesai"
             value={`${totalTrx} Trx`}
-            subtext="Struk kasir resmi diterbitkan"
+            subtext="Struk transaksi yang Anda proses"
             icon="pi pi-receipt"
             iconBg="#EFF6FF"
             iconColor="#0284C7"

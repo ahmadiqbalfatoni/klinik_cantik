@@ -44,52 +44,143 @@ router.post("/", async (req, res) => {
         .forUpdate()
         .first();
 
+      let finalKodeAntrian = "";
+      let finalNoAntrian = "";
+
       if (!record) {
-        const error = new Error(
-          "Seluruh nomor antrean pendaftaran (01-50) sedang terpakai. Silakan lakukan Reset Antrean atau tunggu hingga antrean selesai."
+        // BATAS NOMOR FISIK TERCAPAI (TIDAK ADA LAGI YANG 'tersedia')
+        // Otomatis buat nomor antrean baru (Auto-Extend / Auto-Increment)
+
+        // 1. Cari nomor antrean tertinggi yang pernah ada di cabang ini
+        let qMax = trx("trx_antrian_awal");
+        if (branchCode) {
+          qMax = qMax.where("kode_cabang", branchCode);
+        }
+        const maxRecord = await qMax
+          .orderByRaw("CAST(nomor_antrian AS UNSIGNED) DESC, nomor_antrian DESC")
+          .forUpdate()
+          .first();
+
+        let maxNum = 0;
+        let padLength = 2; // Default 2 digit (01, 02, ..., 30, ...)
+
+        if (maxRecord && maxRecord.nomor_antrian) {
+          const rawNo = String(maxRecord.nomor_antrian).trim();
+          const parsed = parseInt(rawNo.replace(/\D/g, ""), 10);
+          if (!isNaN(parsed)) {
+            maxNum = parsed;
+          }
+          if (rawNo.length > padLength) {
+            padLength = rawNo.length;
+          }
+        }
+
+        const nextNum = maxNum + 1;
+        // Pertahankan format padding yang konsisten
+        const effectivePad = Math.max(padLength, String(nextNum).length >= 3 ? 3 : 2);
+        finalNoAntrian = String(nextNum).padStart(effectivePad, "0");
+
+        // 2. Generate kode_antrian_awal baru (cth: A-YYYYMMDD-001)
+        const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        const prefixAntrian = `A-${todayStr}-`;
+
+        let qLastCode = trx("trx_antrian_awal")
+          .where("kode_antrian_awal", "like", `${prefixAntrian}%`);
+        if (branchCode) {
+          qLastCode = qLastCode.andWhere("kode_cabang", branchCode);
+        }
+        const lastCodeRecord = await qLastCode
+          .orderBy("id", "desc")
+          .forUpdate()
+          .first();
+
+        let nextSeq = 1;
+        if (lastCodeRecord && lastCodeRecord.kode_antrian_awal) {
+          const parts = lastCodeRecord.kode_antrian_awal.split("-");
+          const lastNum = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(lastNum)) {
+            nextSeq = lastNum + 1;
+          }
+        }
+
+        const seqPadded = String(nextSeq).padStart(3, "0");
+        finalKodeAntrian = `${prefixAntrian}${seqPadded}`;
+
+        // 3. Insert nomor baru langsung dengan status 'terpakai' & diambil_at = now
+        const insertData = {
+          kode_cabang: branchCode,
+          kode_antrian_awal: finalKodeAntrian,
+          nomor_antrian: finalNoAntrian,
+          status: "terpakai",
+          diambil_at: now,
+          dipanggil_at: null,
+          tz: oPayload.tz || "UTC",
+          created_by: username || "System (Auto-Extend)",
+          created_at: now,
+          updated_by: username || "System (Auto-Extend)",
+          updated_at: now,
+        };
+
+        const [newId] = await trx("trx_antrian_awal").insert(insertData);
+
+        await ChangesLog(
+          {
+            description: `Ambil Tiket Antrean Baru (Auto-Extend) - Nomor ${finalNoAntrian}`,
+            tableName: "trx_antrian_awal",
+            referenceCode: finalKodeAntrian,
+            action: "CREATE",
+            dataBefore: null,
+            dataAfter: { id: newId, ...insertData },
+            user: username || "System",
+            tz: oPayload.tz || "UTC",
+          },
+          trx
         );
-        error.statusCode = 422;
-        throw error;
+      } else {
+        // Ambil dari kartu fisik yang sudah tersedia
+        finalKodeAntrian = record.kode_antrian_awal;
+        finalNoAntrian = record.nomor_antrian;
+
+        const updateData = {
+          status: "terpakai",
+          diambil_at: now,
+          dipanggil_at: null,
+          updated_by: username,
+          updated_at: now,
+        };
+
+        await trx("trx_antrian_awal")
+          .where("id", record.id)
+          .update(updateData);
+
+        await ChangesLog(
+          {
+            description: `Ambil Tiket Antrean Pendaftaran - Nomor ${record.nomor_antrian}`,
+            tableName: "trx_antrian_awal",
+            referenceCode: record.kode_antrian_awal,
+            action: "UPDATE",
+            dataBefore: record,
+            dataAfter: { ...record, ...updateData },
+            user: username,
+            tz: oPayload.tz || "UTC",
+          },
+          trx
+        );
       }
 
-      const finalKodeAntrian = record.kode_antrian_awal;
-      const finalNoAntrian = record.nomor_antrian;
-
-      const updateData = {
-        status: "terpakai",
-        diambil_at: now,
-        dipanggil_at: null,
-        updated_by: username,
-        updated_at: now,
-      };
-
-      await trx("trx_antrian_awal")
-        .where("id", record.id)
-        .update(updateData);
-
-      await ChangesLog(
-        {
-          description: `Ambil Tiket Antrean Pendaftaran - Nomor ${record.nomor_antrian}`,
-          tableName: "trx_antrian_awal",
-          referenceCode: record.kode_antrian_awal,
-          action: "UPDATE",
-          dataBefore: record,
-          dataAfter: { ...record, ...updateData },
-          user: username,
-          tz: oPayload.tz || "UTC",
-        },
-        trx
-      );
-
       // Hitung jumlah antrean yang sedang menunggu di depannya (diambil & belum dipanggil, atau sedang dipanggil)
-      const waitingCount = await trx("trx_antrian_awal")
+      let qWaiting = trx("trx_antrian_awal")
         .where((qb) => {
           qb.where(function () {
             this.where("status", "terpakai")
               .whereNull("dipanggil_at")
               .where("kode_antrian_awal", "!=", finalKodeAntrian);
           }).orWhere("status", "dipanggil");
-        })
+        });
+      if (branchCode) {
+        qWaiting = qWaiting.andWhere("kode_cabang", branchCode);
+      }
+      const waitingCount = await qWaiting
         .count("* as total")
         .first();
 

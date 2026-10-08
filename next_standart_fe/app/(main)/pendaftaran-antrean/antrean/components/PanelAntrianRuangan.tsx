@@ -20,6 +20,7 @@ import { apiEndpointPanggil, apiEndpointReset, apiEndpointData } from './endpoin
 import { getTzUser } from '@/lib/tools/dateTools';
 import { ActiveTreatmentPanel } from './ActiveTreatmentPanel';
 import { DrawerRiwayatPasien } from './DrawerRiwayatPasien';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 interface PanelAntrianRuanganProps {
     state: State;
@@ -1384,64 +1385,54 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
                             </div>
                         </div>
 
-                        {/* ── KETERANGAN STATUS (FORMAT & JARAK PERSIS MASTER DATA) ── */}
-                        <div className="flex flex-wrap align-items-center gap-3 px-1 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary mt-2">
-                            <span className="flex align-items-center gap-1">
-                                <i className="pi pi-info-circle" />
-                                <span className="font-semibold">KETERANGAN STATUS:</span>
-                            </span>
-
-                            <span
-                                className={`flex align-items-center gap-1 cursor-pointer transition-colors ${
-                                    statusFilter === '' ? 'font-bold text-900' : 'hover:text-900'
-                                }`}
-                                onClick={() => setStatusFilter('')}
-                            >
-                                Semua ({totalCount})
-                            </span>
-
-                            <span
-                                className={`flex align-items-center gap-1 cursor-pointer transition-colors ${
-                                    statusFilter === 'menunggu' ? 'font-bold text-900' : 'hover:text-900'
-                                }`}
-                                onClick={() => setStatusFilter(statusFilter === 'menunggu' ? '' : 'menunggu')}
-                            >
-                                <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#f59e0b', boxShadow: '0 1px 3px #f59e0b55' }} />
-                                Menunggu ({mCount})
-                            </span>
-
-                            <span
-                                className={`flex align-items-center gap-1 cursor-pointer transition-colors ${
-                                    statusFilter === 'dipanggil' ? 'font-bold text-900' : 'hover:text-900'
-                                }`}
-                                onClick={() => setStatusFilter(statusFilter === 'dipanggil' ? '' : 'dipanggil')}
-                            >
-                                <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#3b82f6', boxShadow: '0 1px 3px #3b82f655' }} />
-                                Dipanggil ({pCount})
-                            </span>
-
-                            <span
-                                className={`flex align-items-center gap-1 cursor-pointer transition-colors ${
-                                    statusFilter === 'selesai' ? 'font-bold text-900' : 'hover:text-900'
-                                }`}
-                                onClick={() => setStatusFilter(statusFilter === 'selesai' ? '' : 'selesai')}
-                            >
-                                <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#22c55e', boxShadow: '0 1px 3px #22c55e55' }} />
-                                Selesai ({sCount})
-                            </span>
-
-                            {bCount > 0 && (
-                                <span
-                                    className={`flex align-items-center gap-1 cursor-pointer transition-colors ${
-                                        statusFilter === 'batal' ? 'font-bold text-900' : 'hover:text-900'
+                        {/* ── KETERANGAN STATUS ── */}
+                        <KeteranganStatus
+                            className="mt-2 mb-2"
+                            extraPrefix={
+                                <div
+                                    className={`flex align-items-center gap-2 cursor-pointer transition-colors ${
+                                        statusFilter === '' ? 'font-bold text-900' : 'hover:text-900'
                                     }`}
-                                    onClick={() => setStatusFilter(statusFilter === 'batal' ? '' : 'batal')}
+                                    onClick={() => setStatusFilter('')}
                                 >
-                                    <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#ef4444', boxShadow: '0 1px 3px #ef444455' }} />
-                                    Batal ({bCount})
-                                </span>
-                            )}
-                        </div>
+                                    <span className="text-xs font-semibold text-700">Semua ({totalCount})</span>
+                                </div>
+                            }
+                            items={[
+                                {
+                                    label: 'Menunggu',
+                                    count: mCount,
+                                    color: '#f59e0b',
+                                    active: statusFilter === 'menunggu',
+                                    onClick: () => setStatusFilter(statusFilter === 'menunggu' ? '' : 'menunggu'),
+                                },
+                                {
+                                    label: 'Dipanggil',
+                                    count: pCount,
+                                    color: '#3b82f6',
+                                    active: statusFilter === 'dipanggil',
+                                    onClick: () => setStatusFilter(statusFilter === 'dipanggil' ? '' : 'dipanggil'),
+                                },
+                                {
+                                    label: 'Selesai',
+                                    count: sCount,
+                                    color: '#22c55e',
+                                    active: statusFilter === 'selesai',
+                                    onClick: () => setStatusFilter(statusFilter === 'selesai' ? '' : 'selesai'),
+                                },
+                                ...(bCount > 0
+                                    ? [
+                                          {
+                                              label: 'Batal',
+                                              count: bCount,
+                                              color: '#ef4444',
+                                              active: statusFilter === 'batal',
+                                              onClick: () => setStatusFilter(statusFilter === 'batal' ? '' : 'batal'),
+                                          },
+                                      ]
+                                    : []),
+                            ]}
+                        />
 
                         {/* ── WORKSPACE 2 KOLOM (SEJAJAR DI DESKTOP: SPOTLIGHT DI KIRI + TABEL ANTREAN DI KANAN) ── */}
                         <div className="grid pt-4">

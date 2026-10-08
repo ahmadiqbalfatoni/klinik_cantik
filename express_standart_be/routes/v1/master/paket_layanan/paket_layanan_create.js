@@ -33,6 +33,9 @@ router.post("/", upload.any(), async (req, res) => {
   if (oPayload.is_selamanya !== undefined) {
     oPayload.is_selamanya = Boolean(oPayload.is_selamanya === true || oPayload.is_selamanya === "true" || oPayload.is_selamanya === "1" || oPayload.is_selamanya === 1);
   }
+  if (oPayload.is_include_konsultasi !== undefined) {
+    oPayload.is_include_konsultasi = Boolean(oPayload.is_include_konsultasi === true || oPayload.is_include_konsultasi === "true" || oPayload.is_include_konsultasi === "1" || oPayload.is_include_konsultasi === 1);
+  }
   if (typeof oPayload.details === "string") {
     try {
       oPayload.details = JSON.parse(oPayload.details);
@@ -47,6 +50,7 @@ router.post("/", upload.any(), async (req, res) => {
         nama: Joi.string().max(100).required().label("Nama Paket"),
         kode_ruangan: Joi.string().optional().allow("", null).label("Ruangan"),
         tipe: Joi.string().valid("MEDICAL TREATMENT", "BEAUTY TREATMENT", "SERVICE TREATMENT").optional().allow("", null).label("Tipe Paket"),
+        is_include_konsultasi: Joi.boolean().optional().allow(null).label("Include Konsultasi"),
         harga_paket: Joi.number().min(0).required().label("Harga Paket"),
         masa_berlaku_hari: Joi.number().integer().min(0).optional().allow(null).label("Masa Berlaku (Hari)"),
         is_masa_berlaku_selamanya: Joi.boolean().optional().allow(null).label("Masa Berlaku Selamanya"),
@@ -91,6 +95,7 @@ router.post("/", upload.any(), async (req, res) => {
     }
 
     const selectedTipe = oPayload.tipe || "BEAUTY TREATMENT";
+    const isIncludeKonsul = Boolean(oPayload.is_include_konsultasi);
 
     let kode = "";
     const isSelamanya = Boolean(oPayload.is_selamanya);
@@ -133,6 +138,7 @@ router.post("/", upload.any(), async (req, res) => {
         kode_ruangan: oPayload.kode_ruangan || null,
         nama: oPayload.nama,
         tipe: selectedTipe,
+        is_include_konsultasi: isIncludeKonsul ? 1 : 0,
         harga_paket: oPayload.harga_paket,
         masa_berlaku_hari: isMasaBerlakuSelamanya ? 0 : (parseInt(oPayload.masa_berlaku_hari, 10) || 365),
         is_masa_berlaku_selamanya: isMasaBerlakuSelamanya ? 1 : 0,

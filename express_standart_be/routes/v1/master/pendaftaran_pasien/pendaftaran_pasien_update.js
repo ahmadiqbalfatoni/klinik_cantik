@@ -50,11 +50,11 @@ const handleUpdate = async (req, res) => {
       });
     }
 
-    const nama = (oPayload.nama || dataBefore.nama).trim();
-    const no_hp = (oPayload.no_hp || dataBefore.no_hp).trim();
-    const tanggal_lahir = (oPayload.tanggal_lahir || dataBefore.tanggal_lahir).trim();
-    const jenis_kelamin = (oPayload.jenis_kelamin || dataBefore.jenis_kelamin).trim().toUpperCase();
-    const nik = (oPayload.nik !== undefined ? oPayload.nik : dataBefore.nik || "").trim();
+    const nama = (oPayload.nama || dataBefore.nama || "").trim();
+    const no_hp = (oPayload.no_hp || dataBefore.no_hp || "").trim();
+    const tanggal_lahir = (oPayload.tanggal_lahir || dataBefore.tanggal_lahir || "").toString().trim().slice(0, 10);
+    const jenis_kelamin = (oPayload.jenis_kelamin || dataBefore.jenis_kelamin || "L").toString().trim().toUpperCase();
+    const nik = (oPayload.nik !== undefined ? oPayload.nik : dataBefore.nik || "").toString().trim();
 
     if (!nama) {
       return res.status(422).json({
@@ -64,12 +64,18 @@ const handleUpdate = async (req, res) => {
       });
     }
 
-    const cleanPhone = no_hp.replace(/[\s-]/g, "");
-    const phoneRegex = /^(?:\+62|62|0)[8][1-9]\d{6,11}$/;
-    if (!phoneRegex.test(cleanPhone)) {
+    if (!nik || !/^\d{16}$/.test(nik)) {
       return res.status(422).json({
         status: status.BAD_REQUEST,
-        message: "Format nomor HP tidak valid (contoh: 081234567890)",
+        message: "NIK wajib diisi dan harus terdiri dari 16 digit angka",
+        datetime: formatDateSystem(),
+      });
+    }
+
+    if (!tanggal_lahir) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: "Tanggal lahir wajib diisi",
         datetime: formatDateSystem(),
       });
     }
@@ -85,56 +91,87 @@ const handleUpdate = async (req, res) => {
       });
     }
 
-    if (nik) {
-      if (!/^\d{16}$/.test(nik)) {
-        return res.status(422).json({
-          status: status.BAD_REQUEST,
-          message: "NIK harus terdiri dari 16 digit angka",
-          datetime: formatDateSystem(),
-        });
-      }
-
-      // Check duplicate against other active patients
-      const dupNik = await DB("mst_pasien")
-        .where("nik", nik)
-        .where("status", "aktif")
-        .whereNot("id", dataBefore.id)
-        .first();
-
-      if (dupNik) {
-        return res.status(422).json({
-          status: status.BAD_REQUEST,
-          message: `NIK ${nik} sudah digunakan oleh pasien lain (${dupNik.nama} / ${dupNik.no_rm})`,
-          datetime: formatDateSystem(),
-        });
-      }
+    const cleanPhone = no_hp.replace(/[\s-]/g, "");
+    const phoneRegex = /^(?:\+62|62|0)[8][1-9]\d{6,11}$/;
+    if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: "Format nomor HP tidak valid (contoh: 081234567890)",
+        datetime: formatDateSystem(),
+      });
     }
+
+    const cleanStr = (val) => (val !== undefined && val !== null && String(val).trim() !== "" ? String(val).trim() : null);
+
+    const provinsi = cleanStr(oPayload.provinsi !== undefined ? oPayload.provinsi : dataBefore.provinsi);
+    if (!provinsi) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: "Provinsi wajib diisi/dipilih",
+        datetime: formatDateSystem(),
+      });
+    }
+
+    // Check duplicate against other active patients
+    const dupNik = await DB("mst_pasien")
+      .where("nik", nik)
+      .where("status", "aktif")
+      .whereNot("id", dataBefore.id)
+      .first();
+
+    if (dupNik) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: `NIK ${nik} sudah digunakan oleh pasien lain (${dupNik.nama} / ${dupNik.no_rm})`,
+        datetime: formatDateSystem(),
+      });
+    }
+
+    const validGolDarah = ["A", "B", "AB", "O", "-"];
+    const validAgama = ["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Konghucu", "Lainnya"];
+    const validStatusNikah = ["belum_menikah", "menikah", "cerai_hidup", "cerai_mati"];
+    const validKewarganegaraan = ["WNI", "WNA"];
+    const validJenisKelamin = ["L", "P"];
+
+    const rawGolDarah = oPayload.golongan_darah !== undefined ? oPayload.golongan_darah : dataBefore.golongan_darah;
+    const safeGolDarah = validGolDarah.includes(rawGolDarah) ? rawGolDarah : null;
+
+    const rawAgama = oPayload.agama !== undefined ? oPayload.agama : dataBefore.agama;
+    const safeAgama = validAgama.includes(rawAgama) ? rawAgama : null;
+
+    const rawStatusNikah = oPayload.status_perkawinan !== undefined ? oPayload.status_perkawinan : dataBefore.status_perkawinan;
+    const safeStatusNikah = validStatusNikah.includes(rawStatusNikah) ? rawStatusNikah : null;
+
+    const rawKewarganegaraan = oPayload.kewarganegaraan !== undefined ? oPayload.kewarganegaraan : dataBefore.kewarganegaraan;
+    const safeKewarganegaraan = validKewarganegaraan.includes(rawKewarganegaraan) ? rawKewarganegaraan : "WNI";
+
+    const safeJenisKelamin = validJenisKelamin.includes(jenis_kelamin) ? jenis_kelamin : (dataBefore.jenis_kelamin || "L");
 
     const oDataUpdate = {
       nama: nama,
-      nik: nik || null,
-      tempat_lahir: oPayload.tempat_lahir !== undefined ? oPayload.tempat_lahir : dataBefore.tempat_lahir,
+      nik: nik,
+      tempat_lahir: cleanStr(oPayload.tempat_lahir !== undefined ? oPayload.tempat_lahir : dataBefore.tempat_lahir),
       tanggal_lahir: tanggal_lahir,
-      jenis_kelamin: jenis_kelamin,
-      golongan_darah: oPayload.golongan_darah !== undefined ? oPayload.golongan_darah : dataBefore.golongan_darah,
-      agama: oPayload.agama !== undefined ? oPayload.agama : dataBefore.agama,
-      status_perkawinan: oPayload.status_perkawinan !== undefined ? oPayload.status_perkawinan : dataBefore.status_perkawinan,
-      kewarganegaraan: oPayload.kewarganegaraan !== undefined ? oPayload.kewarganegaraan : dataBefore.kewarganegaraan,
-      pekerjaan: oPayload.pekerjaan !== undefined ? oPayload.pekerjaan : dataBefore.pekerjaan,
-      provinsi: oPayload.provinsi !== undefined ? oPayload.provinsi : dataBefore.provinsi,
-      kota_kabupaten: oPayload.kota_kabupaten !== undefined ? oPayload.kota_kabupaten : dataBefore.kota_kabupaten,
-      kecamatan: oPayload.kecamatan !== undefined ? oPayload.kecamatan : dataBefore.kecamatan,
-      kelurahan_desa: oPayload.kelurahan_desa !== undefined ? oPayload.kelurahan_desa : dataBefore.kelurahan_desa,
-      kode_pos: oPayload.kode_pos !== undefined ? oPayload.kode_pos : dataBefore.kode_pos,
-      patokan: oPayload.patokan !== undefined ? oPayload.patokan : dataBefore.patokan,
+      jenis_kelamin: safeJenisKelamin,
+      golongan_darah: safeGolDarah,
+      agama: safeAgama,
+      status_perkawinan: safeStatusNikah,
+      kewarganegaraan: safeKewarganegaraan,
+      pekerjaan: cleanStr(oPayload.pekerjaan !== undefined ? oPayload.pekerjaan : dataBefore.pekerjaan),
+      provinsi: provinsi,
+      kota_kabupaten: cleanStr(oPayload.kota_kabupaten !== undefined ? oPayload.kota_kabupaten : dataBefore.kota_kabupaten),
+      kecamatan: cleanStr(oPayload.kecamatan !== undefined ? oPayload.kecamatan : dataBefore.kecamatan),
+      kelurahan_desa: cleanStr(oPayload.kelurahan_desa !== undefined ? oPayload.kelurahan_desa : dataBefore.kelurahan_desa),
+      kode_pos: cleanStr(oPayload.kode_pos !== undefined ? oPayload.kode_pos : dataBefore.kode_pos),
+      patokan: cleanStr(oPayload.patokan !== undefined ? oPayload.patokan : dataBefore.patokan),
       no_hp: cleanPhone,
-      email: oPayload.email !== undefined ? oPayload.email : dataBefore.email,
-      nama_kontak_darurat: oPayload.nama_kontak_darurat !== undefined ? oPayload.nama_kontak_darurat : dataBefore.nama_kontak_darurat,
-      no_hp_kontak_darurat: oPayload.no_hp_kontak_darurat !== undefined ? oPayload.no_hp_kontak_darurat : dataBefore.no_hp_kontak_darurat,
-      hubungan_kontak_darurat: oPayload.hubungan_kontak_darurat !== undefined ? oPayload.hubungan_kontak_darurat : dataBefore.hubungan_kontak_darurat,
-      alergi: oPayload.alergi !== undefined ? oPayload.alergi : dataBefore.alergi,
-      foto: oPayload.foto !== undefined ? oPayload.foto : dataBefore.foto,
-      status: oPayload.status !== undefined ? oPayload.status : dataBefore.status,
+      email: cleanStr(oPayload.email !== undefined ? oPayload.email : dataBefore.email),
+      nama_kontak_darurat: cleanStr(oPayload.nama_kontak_darurat !== undefined ? oPayload.nama_kontak_darurat : dataBefore.nama_kontak_darurat),
+      no_hp_kontak_darurat: cleanStr(oPayload.no_hp_kontak_darurat !== undefined ? oPayload.no_hp_kontak_darurat : dataBefore.no_hp_kontak_darurat),
+      hubungan_kontak_darurat: cleanStr(oPayload.hubungan_kontak_darurat !== undefined ? oPayload.hubungan_kontak_darurat : dataBefore.hubungan_kontak_darurat),
+      alergi: cleanStr(oPayload.alergi !== undefined ? oPayload.alergi : dataBefore.alergi),
+      foto: cleanStr(oPayload.foto !== undefined ? oPayload.foto : dataBefore.foto),
+      status: ["aktif", "nonaktif"].includes(oPayload.status) ? oPayload.status : (dataBefore.status || "aktif"),
       updated_by: username,
       updated_at: formatDateSystem(),
     };

@@ -367,10 +367,25 @@ export const PasienFormCard: React.FC<Props> = ({
     setSubmittedTabs((prev) => new Set(prev).add(activeFormTab));
     if (activeFormTab < 3) {
       // Validasi per-tab sebelum lanjut
-      if (activeFormTab === 0 && (!formData.nama.trim() || !formData.tanggal_lahir)) {
-        if (!formData.nama.trim()) showError(toast, 'Nama Pasien wajib diisi');
-        else if (!formData.tanggal_lahir) showError(toast, 'Tanggal Lahir wajib diisi');
-        return;
+      if (activeFormTab === 0) {
+        if (!formData.nama.trim()) {
+          showError(toast, 'Nama Pasien wajib diisi');
+          return;
+        }
+        if (!formData.nik.trim() || formData.nik.trim().length !== 16) {
+          showError(toast, 'NIK wajib diisi (16 digit angka)');
+          return;
+        }
+        if (!formData.tanggal_lahir) {
+          showError(toast, 'Tanggal Lahir wajib diisi');
+          return;
+        }
+      }
+      if (activeFormTab === 1) {
+        if (!formData.provinsi || !formData.provinsi.trim()) {
+          showError(toast, 'Provinsi wajib dipilih');
+          return;
+        }
       }
       if (activeFormTab === 2 && !formData.no_hp.trim()) {
         showError(toast, 'Nomor HP (WhatsApp) wajib diisi');
@@ -391,9 +406,9 @@ export const PasienFormCard: React.FC<Props> = ({
       setActiveFormTab(0);
       return;
     }
-    if (!formData.no_hp.trim()) {
-      showError(toast, 'Nomor HP pasien wajib diisi');
-      setActiveFormTab(2);
+    if (!formData.nik.trim() || formData.nik.trim().length !== 16) {
+      showError(toast, 'NIK wajib diisi (16 digit angka)');
+      setActiveFormTab(0);
       return;
     }
     if (!formData.tanggal_lahir) {
@@ -401,10 +416,14 @@ export const PasienFormCard: React.FC<Props> = ({
       setActiveFormTab(0);
       return;
     }
-
-    if (formData.nik && formData.nik.trim().length !== 16) {
-      showError(toast, 'NIK harus terdiri dari 16 digit angka');
-      setActiveFormTab(0);
+    if (!formData.provinsi || !formData.provinsi.trim()) {
+      showError(toast, 'Provinsi wajib dipilih');
+      setActiveFormTab(1);
+      return;
+    }
+    if (!formData.no_hp.trim()) {
+      showError(toast, 'Nomor HP pasien wajib diisi');
+      setActiveFormTab(2);
       return;
     }
 
@@ -549,16 +568,19 @@ export const PasienFormCard: React.FC<Props> = ({
               )}
             </div>
             <div className="col-12 md:col-6 field">
-              <label className="font-semibold text-900">NIK (16 Digit)</label>
+              <label className="font-semibold text-900">NIK (16 Digit) <span className="text-red-500">*</span></label>
               <InputText
                 value={formData.nik}
                 onChange={(e) => handleChange('nik', e.target.value)}
                 placeholder="3515xxxxxxxxxxxx"
                 maxLength={16}
-                invalid={submittedTabs.has(0) && Boolean(formData.nik && formData.nik.trim().length !== 16)}
-                className={submittedTabs.has(0) && formData.nik && formData.nik.trim().length !== 16 ? 'p-invalid border-1 border-red-500 w-full' : 'w-full'}
+                invalid={submittedTabs.has(0) && (!formData.nik.trim() || formData.nik.trim().length !== 16)}
+                className={submittedTabs.has(0) && (!formData.nik.trim() || formData.nik.trim().length !== 16) ? 'p-invalid border-1 border-red-500 w-full' : 'w-full'}
               />
-              {submittedTabs.has(0) && formData.nik && formData.nik.trim().length !== 16 && (
+              {submittedTabs.has(0) && !formData.nik.trim() && (
+                <small className="p-error text-red-500 font-semibold block mt-1">NIK wajib diisi (16 digit).</small>
+              )}
+              {submittedTabs.has(0) && formData.nik.trim() && formData.nik.trim().length !== 16 && (
                 <small className="p-error text-red-500 font-semibold block mt-1">NIK harus 16 digit angka.</small>
               )}
             </div>
@@ -670,7 +692,7 @@ export const PasienFormCard: React.FC<Props> = ({
         <TabPanel header="Alamat" leftIcon="pi pi-map-marker mr-2">
           <div className="grid p-fluid mt-2">
             <div className="col-12 md:col-6 field">
-              <label className="font-semibold text-900">Provinsi</label>
+              <label className="font-semibold text-900">Provinsi <span className="text-red-500">*</span></label>
               <Dropdown
                 value={kodeProvinsi}
                 options={provList.map((p) => ({ label: p.nama, value: p.kode }))}
@@ -679,7 +701,12 @@ export const PasienFormCard: React.FC<Props> = ({
                 filter
                 showClear
                 loading={loadingProv}
+                invalid={submittedTabs.has(1) && !formData.provinsi?.trim()}
+                className={submittedTabs.has(1) && !formData.provinsi?.trim() ? 'p-invalid border-1 border-red-500 w-full' : 'w-full'}
               />
+              {submittedTabs.has(1) && !formData.provinsi?.trim() && (
+                <small className="p-error text-red-500 font-semibold block mt-1">Provinsi wajib dipilih.</small>
+              )}
             </div>
 
             <div className="col-12 md:col-6 field">

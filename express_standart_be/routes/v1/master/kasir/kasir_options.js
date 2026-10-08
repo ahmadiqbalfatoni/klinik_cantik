@@ -187,6 +187,7 @@ router.post("/", async (req, res) => {
         "p.foto",
         "p.harga_jual as harga",
         "p.satuan",
+        "p.stok_tersedia",
         "k.nama as nama_kategori"
       )
       .orderBy("p.nama", "asc");
@@ -198,6 +199,7 @@ router.post("/", async (req, res) => {
       nama: item.nama,
       nama_kategori: item.nama_kategori || "Produk",
       satuan: item.satuan || "pcs",
+      stok_tersedia: parseInt(item.stok_tersedia || 0),
       harga: parseFloat(item.harga || 0),
     }));
 

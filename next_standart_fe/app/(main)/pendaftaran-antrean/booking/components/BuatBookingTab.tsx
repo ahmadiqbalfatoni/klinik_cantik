@@ -1726,6 +1726,10 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated, initi
                               const isClaimedElsewhere = item.jenis === 'layanan' && Object.values(selectedMap).some(
                                 (it) => it.jenis === 'klaim_paket' && it.kode_layanan === item.kode_layanan
                               );
+                              const isRuanganKonsultasi = Boolean(
+                                ruang.is_konsultasi === 1 ||
+                                ruang.nama_ruangan?.toLowerCase().includes('konsultasi')
+                              );
                               return (
                                 <LayananCard
                                   key={itemKey}
@@ -1733,6 +1737,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated, initi
                                   isSelected={!!selectedMap[itemKey]}
                                   isDisabled={isRuangDisabled || isClaimedElsewhere}
                                   isClaimedElsewhere={isClaimedElsewhere}
+                                  isRuanganKonsultasi={isRuanganKonsultasi}
                                   onToggle={handleToggleItem}
                                   formatPrice={formatCurrency}
                                   gridClassName="col-12 sm:col-6 md:col-4 lg:col-3 xl:col-3 p-2"

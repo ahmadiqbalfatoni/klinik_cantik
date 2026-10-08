@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { Dialog } from 'primereact/dialog';
 import { InputSwitch } from 'primereact/inputswitch';
 import { Dropdown } from 'primereact/dropdown';
 import { InputText } from 'primereact/inputtext';
-import { TabCetakAntreanProps, AmbilResult } from '../interfaces';
+import { TabCetakAntreanProps, AmbilResult, TableData } from '../interfaces';
 import postData from '@/lib/axios/postData';
 import { apiEndpointAmbil, apiEndpointPanggil, apiEndpointReset } from '../endpoints';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
@@ -110,6 +111,7 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
     toast,
     getGridData,
 }) => {
+    const router = useRouter();
     const [loadingAmbil, setLoadingAmbil] = useState<boolean>(false);
     const [loadingPanggil, setLoadingPanggil] = useState<boolean>(false);
     const [loadingSelesai, setLoadingSelesai] = useState<boolean>(false);
@@ -494,31 +496,80 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
         }
     };
 
-    // Handler Selesaikan Antrean yang Sedang Dipanggil
-    const handleSelesaiDipanggil = async () => {
+    // Handler Lanjutkan Pendaftaran (Arahkan ke Tampilan Awal Pasien Baru tanpa menyelesaikan antrean langsung)
+    // Status antrean akan otomatis diselesaikan oleh backend saat layanan dipilih & antrean layanan diterbitkan
+    const handleLanjutkanPendaftaran = () => {
         if (!currentDipanggil) {
             showWarning(toast, 'Tidak ada antrean yang sedang dipanggil saat ini.');
             return;
         }
 
-        setLoadingSelesai(true);
-        try {
-            const res = await postData(apiEndpointPanggil, {
-                kode_antrian: currentDipanggil.kode_antrian,
-                aksi: 'selesai',
-                tz: getTzUser(),
-            });
-            showSuccess(
-                toast,
-                res.data?.message || `Nomor antrean ${currentDipanggil.no_antrian} telah selesai dilayani.`
-            );
-            await getGridData();
-        } catch (error: any) {
-            const e = error?.response?.data || error;
-            showError(toast, e?.message || 'Gagal menyelesaikan antrean');
-        } finally {
-            setLoadingSelesai(false);
+        showSuccess(
+            toast,
+            `Nomor antrean ${currentDipanggil.no_antrian} dilanjutkan ke pendaftaran pasien baru.`
+        );
+        router.push('/pendaftaran-antrean/registrasi-pasien');
+    };
+
+    // Handler Lewati Antrean (Pasien tidak hadir / ditinggal -> status Selesai)
+    const handleLewatiAntrean = (targetItem?: TableData) => {
+        const item = targetItem || currentDipanggil;
+        if (!item) {
+            showWarning(toast, 'Tidak ada antrean yang dapat dilewati.');
+            return;
         }
+
+        confirmDialog({
+            className: 'confirm-dialog-centered',
+            style: { width: '400px', maxWidth: '92vw' },
+            message: (
+                <div className="flex flex-column align-items-center text-center w-full" style={{ padding: '4px 0 0 0' }}>
+                    <div
+                        className="flex align-items-center justify-content-center"
+                        style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '50%',
+                            backgroundColor: '#fff1f2',
+                            border: '1.5px solid #fecdd3',
+                            marginBottom: '16px',
+                        }}
+                    >
+                        <i className="pi pi-forward text-2xl text-rose-600 font-bold" />
+                    </div>
+                    <div className="w-full">
+                        <h3 className="font-bold text-lg text-900 m-0" style={{ marginBottom: '6px' }}>
+                            Lewati Nomor {item.no_antrian}?
+                        </h3>
+                        <p className="text-color-secondary text-sm m-0 line-height-3">
+                            Pasien nomor <strong>{item.no_antrian}</strong> tidak hadir atau ditinggal? Nomor antrean ini akan diselesaikan (dilewati) dan tidak dapat dipanggil lagi.
+                        </p>
+                    </div>
+                </div>
+            ) as any,
+            header: 'Konfirmasi Lewati Antrean',
+            acceptLabel: '⏭️ Ya, Lewati (Selesai)',
+            rejectLabel: 'Batal',
+            acceptClassName: 'p-button-danger p-button-sm font-semibold modal-btn-primary',
+            rejectClassName: 'p-button-secondary p-button-outlined p-button-sm font-medium modal-btn-secondary',
+            accept: async () => {
+                setLoadingSelesai(true);
+                try {
+                    const res = await postData(apiEndpointPanggil, {
+                        kode_antrian: item.kode_antrian,
+                        aksi: 'lewati',
+                        tz: getTzUser(),
+                    });
+                    showSuccess(toast, res.data?.message || `Nomor antrean ${item.no_antrian} telah dilewati (selesai).`);
+                    await getGridData();
+                } catch (error: any) {
+                    const e = error?.response?.data || error;
+                    showError(toast, e?.message || 'Gagal melewati antrean');
+                } finally {
+                    setLoadingSelesai(false);
+                }
+            },
+        });
     };
 
     // Handler Panggil Ulang Suara
@@ -532,20 +583,28 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
     // Handler Reset Seluruh Pool Antrean ke Status Tersedia
     const handleReset = () => {
         confirmDialog({
-            style: { width: '420px', maxWidth: '92vw' },
+            className: 'confirm-dialog-centered',
+            style: { width: '400px', maxWidth: '92vw' },
             message: (
-                <div className="flex flex-column align-items-center text-center gap-3 py-1">
+                <div className="flex flex-column align-items-center text-center w-full" style={{ padding: '4px 0 0 0' }}>
                     <div
-                        className="w-3rem h-3rem border-round-circle flex align-items-center justify-content-center shadow-1"
-                        style={{ backgroundColor: '#fff7ed', color: '#ea580c' }}
+                        className="flex align-items-center justify-content-center"
+                        style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '50%',
+                            backgroundColor: '#fff7ed',
+                            border: '1.5px solid #fed7aa',
+                            marginBottom: '16px',
+                        }}
                     >
-                        <i className="pi pi-refresh text-2xl font-bold text-orange-600" />
+                        <i className="pi pi-refresh text-2xl text-orange-600 font-bold" />
                     </div>
-                    <div>
-                        <h3 className="font-bold text-lg mb-1 text-900">
+                    <div className="w-full">
+                        <h3 className="font-bold text-lg text-900 m-0" style={{ marginBottom: '6px' }}>
                             Reset Seluruh Antrean (Pool {poolRangeText})?
                         </h3>
-                        <p className="text-color-secondary text-xs m-0 line-height-3">
+                        <p className="text-color-secondary text-sm m-0 line-height-3">
                             Seluruh nomor kartu fisik ({poolRangeText}) akan dikembalikan ke status &apos;Tersedia&apos; dan data transaksi sebelumnya akan dibersihkan untuk pelayanan hari ini.
                         </p>
                     </div>
@@ -554,8 +613,8 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
             header: 'Konfirmasi Reset Pool Antrean',
             acceptLabel: 'Ya, Reset Semua',
             rejectLabel: 'Batal',
-            acceptClassName: 'p-button-warning p-button-sm font-bold',
-            rejectClassName: 'p-button-secondary p-button-outlined p-button-sm font-semibold',
+            acceptClassName: 'p-button-warning p-button-sm font-semibold modal-btn-primary',
+            rejectClassName: 'p-button-secondary p-button-outlined p-button-sm font-medium modal-btn-secondary',
             accept: async () => {
                 try {
                     const res = await postData(apiEndpointReset, { tz: getTzUser() });
@@ -571,7 +630,142 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
 
     return (
         <div className="card border-round-xl surface-border shadow-1 p-4">
-            <ConfirmDialog style={{ width: '420px', maxWidth: '92vw' }} />
+            <ConfirmDialog
+                className="confirm-dialog-centered"
+                style={{ width: '400px', maxWidth: '92vw' }}
+            />
+            <style jsx global>{`
+                .confirm-dialog-centered.p-dialog {
+                    border-radius: 16px !important;
+                    overflow: hidden !important;
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+                    border: 1px solid rgba(226, 232, 240, 0.8) !important;
+                }
+                .confirm-dialog-centered .p-dialog-header {
+                    position: relative !important;
+                    padding: 20px 24px 10px 24px !important;
+                    border-bottom: none !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    text-align: center !important;
+                    background: #ffffff !important;
+                }
+                .confirm-dialog-centered .p-dialog-title {
+                    font-size: 1.125rem !important;
+                    font-weight: 700 !important;
+                    color: #1e293b !important;
+                    line-height: 1.4 !important;
+                    text-align: center !important;
+                    width: 100% !important;
+                    margin: 0 auto !important;
+                    padding: 0 28px !important;
+                }
+                .confirm-dialog-centered .p-dialog-header-icons {
+                    position: absolute !important;
+                    right: 16px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    display: flex !important;
+                    align-items: center !important;
+                }
+                .confirm-dialog-centered .p-dialog-header-icon {
+                    width: 32px !important;
+                    height: 32px !important;
+                    border-radius: 8px !important;
+                    color: #64748b !important;
+                    transition: all 0.15s ease-in-out !important;
+                }
+                .confirm-dialog-centered .p-dialog-header-icon:hover {
+                    background-color: #f1f5f9 !important;
+                    color: #0f172a !important;
+                }
+                .confirm-dialog-centered .p-dialog-content {
+                    padding: 8px 24px 20px 24px !important;
+                    background: #ffffff !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    text-align: center !important;
+                    width: 100% !important;
+                }
+                .confirm-dialog-centered .p-confirm-dialog-message {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    width: 100% !important;
+                    text-align: center !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                }
+                .confirm-dialog-centered .p-confirm-dialog-icon {
+                    display: none !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 12px !important;
+                    padding: 0 24px 24px 24px !important;
+                    border-top: none !important;
+                    background: #ffffff !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .p-button {
+                    height: 42px !important;
+                    min-height: 42px !important;
+                    border-radius: 8px !important;
+                    padding: 0 18px !important;
+                    font-size: 0.875rem !important;
+                    font-weight: 600 !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    transition: all 0.2s ease-in-out !important;
+                    box-sizing: border-box !important;
+                    margin: 0 !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .modal-btn-secondary,
+                .confirm-dialog-centered .p-dialog-footer .p-button-secondary {
+                    flex: 1 1 0 !important;
+                    background: #ffffff !important;
+                    color: #475569 !important;
+                    border: 1px solid #cbd5e1 !important;
+                    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .modal-btn-secondary:hover,
+                .confirm-dialog-centered .p-dialog-footer .p-button-secondary:hover {
+                    background: #f8fafc !important;
+                    color: #1e293b !important;
+                    border-color: #94a3b8 !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .modal-btn-secondary:focus,
+                .confirm-dialog-centered .p-dialog-footer .p-button-secondary:focus {
+                    outline: none !important;
+                    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.5) !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .modal-btn-primary,
+                .confirm-dialog-centered .p-dialog-footer .p-button-success,
+                .confirm-dialog-centered .p-dialog-footer .p-button-warning {
+                    flex: 1.4 1 0 !important;
+                    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .p-button-success {
+                    background: #10b981 !important;
+                    color: #ffffff !important;
+                    border: 1px solid #10b981 !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .p-button-success:hover {
+                    background: #059669 !important;
+                    border-color: #059669 !important;
+                    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.25) !important;
+                }
+                .confirm-dialog-centered .p-dialog-footer .p-button-success:focus {
+                    outline: none !important;
+                    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3) !important;
+                }
+            `}</style>
 
             {/* ── Top Bar: Header & Indikator Koneksi Printer ── */}
             <div className="flex justify-content-between align-items-center flex-wrap gap-3 mb-4 pb-3 border-bottom-1 surface-border">
@@ -714,17 +908,17 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                         <div className="w-full my-2">
                             <div className="p-3 border-round-xl border-1 border-slate-200 bg-white shadow-1 flex flex-column align-items-center gap-1">
                                 <Tag
-                                    value={tersedia > 0 ? "KARTU FISIK TERSEDIA" : "KARTU ANTREAN HABIS"}
-                                    severity={tersedia > 0 ? "success" : "danger"}
+                                    value={tersedia > 0 ? "KARTU FISIK TERSEDIA" : "KARTU FISIK PENUH (AUTO-GENERATE)"}
+                                    severity={tersedia > 0 ? "success" : "info"}
                                     className="font-bold text-xs mb-1"
                                 />
-                                <div className={`text-3xl lg:text-4xl font-black tracking-wider ${tersedia > 0 ? 'text-teal-700' : 'text-red-500'}`}>
-                                    {tersedia > 0 ? `${tersedia} Tersedia` : '0 Tersedia'}
+                                <div className={`text-3xl lg:text-4xl font-black tracking-wider ${tersedia > 0 ? 'text-teal-700' : 'text-blue-600'}`}>
+                                    {tersedia > 0 ? `${tersedia} Tersedia` : 'Auto +1 Siap'}
                                 </div>
                                 <span className="text-xs text-slate-500 font-medium">
                                     {tersedia > 0
                                         ? 'Nomor urutan berikutnya siap diambil & dicetak'
-                                        : `Seluruh nomor kartu fisik (${poolRangeText}) sedang terpakai`}
+                                        : `Kartu fisik (${poolRangeText}) habis. Klik tombol untuk otomatis menerbitkan nomor baru.`}
                                 </span>
                             </div>
                         </div>
@@ -737,21 +931,21 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                                         ? 'Memproses Nomor...'
                                         : tersedia > 0
                                         ? '🎟️ AMBIL NOMOR ANTREAN'
-                                        : '⚠️ SEMUA KARTU SEDANG TERPAKAI'
+                                        : '✨ AMBIL NOMOR BARU (OTOMATIS)'
                                 }
                                 icon={loadingAmbil ? 'pi pi-spin pi-spinner' : 'pi pi-print'}
-                                disabled={loadingAmbil || tersedia === 0}
+                                disabled={loadingAmbil}
                                 onClick={handleAmbilAntrean}
                                 className="font-black text-base lg:text-lg py-3 px-4 border-round-xl border-none shadow-3 w-full transition-all"
                                 style={{
                                     background: tersedia > 0
                                         ? 'linear-gradient(135deg, #0d9488 0%, #059669 100%)'
-                                        : '#94a3b8',
+                                        : 'linear-gradient(135deg, #0284c7 0%, #0d9488 100%)',
                                     color: '#ffffff',
-                                    cursor: tersedia > 0 ? 'pointer' : 'not-allowed',
+                                    cursor: 'pointer',
                                 }}
                                 onMouseEnter={(e) => {
-                                    if (!loadingAmbil && tersedia > 0) {
+                                    if (!loadingAmbil) {
                                         (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.02)';
                                         (e.currentTarget as HTMLButtonElement).style.boxShadow =
                                             '0 8px 20px rgba(13, 148, 136, 0.4)';
@@ -800,7 +994,7 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                                 Kontrol Panggilan Loket
                             </h2>
                             <p className="text-slate-500 text-xs mb-3">
-                                Panggil antrean pasien ke loket dan tandai selesai saat pelayanan rampung.
+                                Panggil antrean pasien ke loket dan lanjutkan proses ke pendaftaran pasien baru.
                             </p>
                         </div>
 
@@ -845,16 +1039,26 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                                         severity="warning"
                                         onClick={handlePanggilUlangSuara}
                                         className="font-bold py-3 px-3 border-round-xl shadow-2 text-sm flex-1"
-                                        style={{ minWidth: '130px' }}
+                                        style={{ minWidth: '120px' }}
                                     />
                                     <Button
-                                        label={loadingSelesai ? 'Menyelesaikan...' : '✅ Selesai Dilayani'}
-                                        icon={loadingSelesai ? 'pi pi-spin pi-spinner' : 'pi pi-check'}
+                                        label="⏭️ Lewati"
+                                        icon="pi pi-forward"
+                                        severity="danger"
+                                        outlined
+                                        onClick={() => handleLewatiAntrean(currentDipanggil)}
+                                        className="font-bold py-3 px-3 border-round-xl shadow-1 text-sm flex-1"
+                                        style={{ minWidth: '100px' }}
+                                        tooltip="Lewati jika pasien tidak hadir / ditinggal"
+                                    />
+                                    <Button
+                                        label={loadingSelesai ? 'Memproses...' : '👉 Lanjutkan Pendaftaran'}
+                                        icon={loadingSelesai ? 'pi pi-spin pi-spinner' : 'pi pi-user-plus'}
                                         severity="success"
                                         disabled={loadingSelesai}
-                                        onClick={handleSelesaiDipanggil}
+                                        onClick={handleLanjutkanPendaftaran}
                                         className="font-bold py-3 px-3 border-round-xl shadow-2 text-sm flex-1"
-                                        style={{ minWidth: '140px' }}
+                                        style={{ minWidth: '150px' }}
                                     />
                                 </div>
                             ) : (

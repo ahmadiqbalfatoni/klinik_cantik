@@ -13,14 +13,17 @@ export interface CartItem {
   satuan?: string;
   qty: number;
   harga_satuan: number;
+  harga_master?: number | null;
+  dal_harga?: number | null;
   subtotal: number;
   is_promo?: boolean;
   kode_promo_item?: string;
   is_from_pendaftaran?: boolean;
+  is_free_include?: boolean;
   // Snapshot promo per-item
   kode_promo?: string | null;
   nama_promo?: string | null;
-  jenis_diskon?: 'persen' | 'nominal' | null;
+  jenis_diskon?: 'persen' | 'nominal' | 'include_treatment' | string | null;
   nilai_diskon?: number | null;
   diskon?: number | null; // Nominal diskon rupiah untuk item ini
   subtotal_setelah_diskon?: number | null;

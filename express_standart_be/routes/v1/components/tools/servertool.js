@@ -283,6 +283,30 @@ export const getDBConfig = async (kode = [], trx = DB) => {
   }
 };
 
+const safeJsonStringify = (obj) => {
+  if (!obj) return null;
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (key, value) => {
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) {
+          return "[Circular]";
+        }
+        if (value.toSQL || value._statements || value._single) {
+          return "[KnexExpression]";
+        }
+        seen.add(value);
+      }
+      if (typeof value === "function" || typeof value === "symbol") {
+        return undefined;
+      }
+      return value;
+    });
+  } catch (e) {
+    return JSON.stringify({ summary: "Could not serialize object" });
+  }
+};
+
 export const ChangesLog = async (
   {
     description,
@@ -322,8 +346,8 @@ export const ChangesLog = async (
       nama_tabel: tableName,
       kode_referensi: referenceCode,
       aksi: normalizedAction,
-      data_sebelum: dataBefore ? JSON.stringify(dataBefore) : null,
-      data_sesudah: dataAfter ? JSON.stringify(dataAfter) : null,
+      data_sebelum: safeJsonStringify(dataBefore),
+      data_sesudah: safeJsonStringify(dataAfter),
       tz: tz,
       created_by: user || "system",
       created_at: formatDateSystem(),

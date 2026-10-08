@@ -11,13 +11,15 @@ import { InputText } from 'primereact/inputtext';
 import { InputNumber } from 'primereact/inputnumber';
 import { Dialog } from 'primereact/dialog';
 import { Tag } from 'primereact/tag';
+import { Checkbox } from 'primereact/checkbox';
 import { Dropdown } from 'primereact/dropdown';
 import { Divider } from 'primereact/divider';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
-import { showError, showSuccess, formatImageUrl } from '@/lib/tools/generalTools';
+import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { ImageCropDialog } from '../components/ImageCropDialog';
+import { KeteranganStatus } from '@/app/components/KeteranganStatus';
 
 const Page = () => {
     const toast = useRef<Toast>(null);
@@ -70,6 +72,7 @@ const Page = () => {
         kode_ruangan_konsultasi: '',
         nama: '',
         tipe: 'BEAUTY TREATMENT',
+        is_include_konsultasi: 0,
         harga: 0,
         durasi_menit: 30,
         status: 'aktif',
@@ -225,6 +228,7 @@ const Page = () => {
             kode_ruangan_konsultasi: '',
             nama: '',
             tipe: 'BEAUTY TREATMENT',
+            is_include_konsultasi: 0,
             harga: 0,
             durasi_menit: 30,
             status: 'aktif',
@@ -256,8 +260,9 @@ const Page = () => {
             wajib_konsultasi: isKonsul ? 'tidak' : wk,
             kode_ruangan_konsultasi: isKonsul ? '' : (rowData.kode_ruangan_konsultasi || ''),
             tipe: isKonsul ? 'SERVICE TREATMENT' : (rowData.tipe || 'BEAUTY TREATMENT'),
+            is_include_konsultasi: rowData.is_include_konsultasi ? 1 : 0,
             foto: null,
-            foto_url: formatImageUrl(rowData.foto) || '',
+            foto_url: rowData.foto || '',
             hapus_foto: false,
         });
         setDialogVisible(true);
@@ -351,6 +356,7 @@ const Page = () => {
             fd.append('kode_ruangan', formData.kode_ruangan || '');
             fd.append('wajib_konsultasi', wk);
             fd.append('kode_ruangan_konsultasi', wk === 'tidak' ? '' : (formData.kode_ruangan_konsultasi || ''));
+            fd.append('is_include_konsultasi', String(formData.is_include_konsultasi ? 1 : 0));
             fd.append('harga', String(formData.harga || 0));
             fd.append('durasi_menit', String(formData.durasi_menit || 30));
             fd.append('status', formData.status || 'aktif');
@@ -472,7 +478,8 @@ const Page = () => {
                     dataKey="kode_layanan"
                     className="p-datatable-sm"
                     emptyMessage="Data layanan tidak ditemukan."
-                    responsiveLayout="scroll"
+                    scrollable
+                    tableStyle={{ minWidth: '75rem' }}
                     rowsPerPageOptions={[10, 25, 50]}
                     paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                     currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data"
@@ -524,27 +531,14 @@ const Page = () => {
                                     />
                                 </div>
                             </div>
-                            <div className="flex flex-wrap align-items-center gap-3 px-1 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                                <span className="flex align-items-center gap-1">
-                                    <i className="pi pi-info-circle" />
-                                    <span className="font-semibold">KETERANGAN STATUS:</span>
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span style={{ display:'inline-block', width:'12px', height:'12px', borderRadius:'3px', backgroundColor:'#22c55e', boxShadow:'0 1px 3px #22c55e55' }} />
-                                    Aktif
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span style={{ display:'inline-block', width:'12px', height:'12px', borderRadius:'3px', backgroundColor:'#ef4444', boxShadow:'0 1px 3px #ef444455' }} />
-                                    Tidak Aktif
-                                </span>
-                            </div>
+                            <KeteranganStatus className="mb-2" />
                         </div>
                     }
                 >
-                    <Column selectionMode="multiple" headerStyle={{ width: '3rem' }}></Column>
+                    <Column selectionMode="multiple" headerStyle={{ width: '3rem', whiteSpace: 'nowrap' }} style={{ width: '3rem' }}></Column>
                     <Column
                         header=""
-                        headerStyle={{ width: '3rem' }}
+                        headerStyle={{ width: '2.5rem', whiteSpace: 'nowrap' }}
                         align="center"
                         body={(r) => (
                             <span
@@ -562,7 +556,7 @@ const Page = () => {
                     ></Column>
                     <Column
                         header="Foto"
-                        headerStyle={{ width: '4.5rem', textAlign: 'center', fontWeight: 'bold' }}
+                        headerStyle={{ width: '4rem', textAlign: 'center', fontWeight: 'bold', whiteSpace: 'nowrap' }}
                         align="center"
                         body={(r) => (
                             <div
@@ -581,7 +575,7 @@ const Page = () => {
                             >
                                 {r.foto ? (
                                     <img
-                                        src={formatImageUrl(r.foto)}
+                                        src={r.foto}
                                         alt={r.nama}
                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                         onError={(e: any) => {
@@ -599,15 +593,26 @@ const Page = () => {
                             </div>
                         )}
                     ></Column>
-                    <Column field="kode_layanan" header="Kode" sortable headerStyle={{ fontWeight: 'bold', width: '7rem' }}></Column>
-                    <Column field="nama" header="Nama Layanan" sortable headerStyle={{ fontWeight: 'bold' }}></Column>
+                    <Column field="kode_layanan" header="Kode" sortable headerStyle={{ fontWeight: 'bold', width: '6.5rem', minWidth: '6.5rem', whiteSpace: 'nowrap' }} bodyStyle={{ whiteSpace: 'nowrap' }}></Column>
+                    <Column
+                        field="nama"
+                        header="Nama Layanan"
+                        sortable
+                        headerStyle={{ fontWeight: 'bold', minWidth: '13rem', whiteSpace: 'nowrap' }}
+                        body={(r) => (
+                            <span className="font-semibold text-slate-800 white-space-nowrap" title={r.nama}>
+                                {r.nama}
+                            </span>
+                        )}
+                    ></Column>
 
                     {/* Single Unified Column: Tipe Layanan & Alur Konsultasi */}
                     <Column
                         field="tipe"
                         header="Tipe Layanan"
                         sortable
-                        headerStyle={{ fontWeight: 'bold', minWidth: '15rem' }}
+                        headerStyle={{ fontWeight: 'bold', width: '10.5rem', minWidth: '10.5rem', whiteSpace: 'nowrap' }}
+                        bodyStyle={{ width: '10.5rem', whiteSpace: 'nowrap' }}
                         body={(r) => {
                             const val = r.tipe || 'BEAUTY TREATMENT';
                             let severity: 'danger' | 'info' | 'success' = 'info';
@@ -625,7 +630,7 @@ const Page = () => {
                             }
 
                             return (
-                                <div className="flex flex-column gap-1">
+                                <div className="flex flex-column gap-1 white-space-nowrap">
                                     <div className="flex align-items-center gap-2">
                                         <Tag
                                             value={title}
@@ -642,14 +647,49 @@ const Page = () => {
                         }}
                     ></Column>
 
-                    <Column field="nama_kategori" header="Kategori" body={(r) => r.nama_kategori || r.kode_kategori_layanan || '-'}></Column>
+                    {/* Dedicated Column: Include Konsultasi */}
+                    <Column
+                        field="is_include_konsultasi"
+                        header="Include Konsul"
+                        sortable
+                        align="center"
+                        headerStyle={{ fontWeight: 'bold', width: '7.5rem', minWidth: '7.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}
+                        bodyStyle={{ width: '7.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}
+                        body={(r) => {
+                            const isInclude = Boolean(r.is_include_konsultasi === 1 || r.is_include_konsultasi === '1' || r.is_include_konsultasi === true);
+                            return isInclude ? (
+                                <Tag
+                                    value="Include"
+                                    severity="success"
+                                    icon="pi pi-check-circle"
+                                    className="text-xs font-semibold px-2 py-1 border-round-md white-space-nowrap"
+                                    title="Biaya konsultasi di awal gratis (Rp 0) jika pasien memilih tindakan ini"
+                                />
+                            ) : (
+                                <Tag
+                                    value="Tidak"
+                                    severity="secondary"
+                                    icon="pi pi-times-circle"
+                                    className="text-xs font-medium px-2 py-1 border-round-md text-500 surface-200 white-space-nowrap"
+                                    title="Biaya konsultasi dan tindakan dibayar normal terpisah"
+                                />
+                            );
+                        }}
+                    ></Column>
+
+                    <Column
+                        field="nama_kategori"
+                        header="Kategori"
+                        headerStyle={{ fontWeight: 'bold', width: '9.5rem', minWidth: '9.5rem', whiteSpace: 'nowrap' }}
+                        body={(r) => <span className="white-space-nowrap text-slate-700">{r.nama_kategori || r.kode_kategori_layanan || '-'}</span>}
+                    ></Column>
                     
                     <Column
                         field="nama_ruangan"
                         header="Ruangan"
-                        style={{ minWidth: '11rem' }}
+                        headerStyle={{ fontWeight: 'bold', minWidth: '12rem', whiteSpace: 'nowrap' }}
                         body={(r) => (
-                            <div className="flex flex-column">
+                            <div className="flex flex-column white-space-nowrap">
                                 <span className="text-800 font-medium text-sm">
                                     {r.nama_ruangan ? `${r.kode_ruangan ? r.kode_ruangan + ' - ' : ''}${r.nama_ruangan}` : (r.kode_ruangan || '-')}
                                 </span>
@@ -663,12 +703,25 @@ const Page = () => {
                         )}
                     ></Column>
 
-                    <Column field="harga" header="Harga" body={(r) => <span className="font-semibold text-green-600">{formatRupiah(r.harga)}</span>}></Column>
-                    <Column field="durasi_menit" header="Durasi" body={(r) => `${r.durasi_menit} Menit`}></Column>
+                    <Column
+                        field="harga"
+                        header="Harga"
+                        headerStyle={{ fontWeight: 'bold', width: '8.5rem', minWidth: '8.5rem', whiteSpace: 'nowrap' }}
+                        body={(r) => <span className="font-semibold text-green-600 white-space-nowrap">{formatRupiah(r.harga)}</span>}
+                    ></Column>
+
+                    <Column
+                        field="durasi_menit"
+                        header="Durasi"
+                        headerStyle={{ fontWeight: 'bold', width: '6.5rem', minWidth: '6.5rem', whiteSpace: 'nowrap' }}
+                        body={(r) => <span className="white-space-nowrap font-medium text-slate-700">{r.durasi_menit} Menit</span>}
+                    ></Column>
+
                     <Column
                         header="Aksi"
                         align="center"
-                        headerStyle={{ width: '8rem', textAlign: 'center' }}
+                        headerStyle={{ width: '6.5rem', textAlign: 'center', fontWeight: 'bold', whiteSpace: 'nowrap' }}
+                        bodyStyle={{ whiteSpace: 'nowrap' }}
                         body={(r) => (
                             <div className="flex align-items-center justify-content-center gap-2">
                                 <Button icon="pi pi-pencil" outlined severity="success" className="p-button-sm border-round-md" onClick={() => handleOpenEdit(r)} tooltip="Edit" />
@@ -764,7 +817,7 @@ const Page = () => {
                                         />
                                     ) : (
                                         <img
-                                            src={formatImageUrl(formData.foto_url)}
+                                            src={formData.foto_url}
                                             alt="Preview"
                                             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                                             onError={(e: any) => {
@@ -869,6 +922,23 @@ const Page = () => {
                             {formData.tipe === 'BEAUTY TREATMENT' && '💆 Pasien dapat memilih konsultasi terlebih dahulu atau langsung tindakan perawatan.'}
                             {formData.tipe === 'SERVICE TREATMENT' && '✂️ Layanan reguler/salon, pasien langsung diarahkan ke ruang tindakan tanpa konsultasi dokter.'}
                         </small>
+                    </div>
+
+                    {/* TOGGLE INCLUDE KONSULTASI */}
+                    <div className="surface-50 p-3 border-round-xl border-1 surface-border flex align-items-start gap-3">
+                        <Checkbox
+                            inputId="is_include_konsultasi"
+                            checked={Boolean(formData.is_include_konsultasi)}
+                            onChange={(e) => setFormData({ ...formData, is_include_konsultasi: e.checked ? 1 : 0 })}
+                        />
+                        <div>
+                            <label htmlFor="is_include_konsultasi" className="text-sm font-semibold text-800 cursor-pointer block">
+                                Include Biaya Konsultasi (Gratis Konsul)
+                            </label>
+                            <small className="text-500 block line-height-2 mt-1">
+                                Jika dicentang, biaya konsultasi dokter di awal otomatis gratis (Rp 0) saat pasien memilih tindakan ini.
+                            </small>
+                        </div>
                     </div>
 
                     <div>

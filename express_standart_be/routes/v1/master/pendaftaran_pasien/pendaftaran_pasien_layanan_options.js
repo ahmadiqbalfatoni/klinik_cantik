@@ -10,7 +10,7 @@
 
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem, getJakartaMinutesNow } from "../../components/tools/date_tools.js";
+import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
@@ -99,6 +99,7 @@ const handleGetOptions = async (req, res) => {
         "l.harga",
         "l.durasi_menit",
         "l.tipe",
+        "l.is_include_konsultasi",
         "l.kode_ruangan",
         "l.wajib_konsultasi",
         "l.kode_ruangan_konsultasi",
@@ -126,7 +127,7 @@ const handleGetOptions = async (req, res) => {
     if (branchCode) qPaket.where("p.kode_cabang", branchCode);
 
     const vaPaket = await qPaket
-      .select("p.kode_paket_layanan", "p.nama", "p.harga_paket", "p.masa_berlaku_hari", "p.tanggal_mulai", "p.tanggal_selesai", "p.tipe", "p.kode_ruangan", "p.foto", "r.nama_ruangan as nama_ruangan", "r.is_konsultasi as is_konsultasi")
+      .select("p.kode_paket_layanan", "p.nama", "p.harga_paket", "p.is_include_konsultasi", "p.masa_berlaku_hari", "p.tanggal_mulai", "p.tanggal_selesai", "p.tipe", "p.kode_ruangan", "p.foto", "r.nama_ruangan as nama_ruangan", "r.is_konsultasi as is_konsultasi")
       .orderBy("p.id", "asc");
 
     // 5b. Fetch antrean aktif hari ini per ruangan dan hitung sisa beban waktu
@@ -141,7 +142,7 @@ const handleGetOptions = async (req, res) => {
 
     const nowTime = new Date();
     const nowTimestamp = nowTime.getTime();
-    const nowMinutes = getJakartaMinutesNow();
+    const nowMinutes = nowTime.getHours() * 60 + nowTime.getMinutes();
 
     const minRelevantBookingDate = new Date(nowTimestamp - toleransiMenit * 60000);
     const minRelevantBookingTimeStr = minRelevantBookingDate.toTimeString().slice(0, 8); // "HH:mm:ss"
@@ -363,7 +364,7 @@ const handleGetOptions = async (req, res) => {
       if (nearestBkg && nearestBkg.jam_booking) {
         const [bH, bM] = String(nearestBkg.jam_booking).slice(0, 5).split(":").map(Number);
         const bookingMinutes = (isNaN(bH) ? 0 : bH) * 60 + (isNaN(bM) ? 0 : bM);
-        const nowMin = getJakartaMinutesNow();
+        const nowMin = nowTime.getHours() * 60 + nowTime.getMinutes();
         const menitMenujuBooking = bookingMinutes - nowMin;
         slackMenit = menitMenujuBooking - sisaBebanMenit - bufferMenit;
 
@@ -526,6 +527,19 @@ const handleGetOptions = async (req, res) => {
       };
     };
 
+    // Ambil master & promo layanan konsultasi aktif
+    const rawConsultService = vaLayanan.find(
+      (l) => Number(l.is_konsultasi) === 1 || l.kode_ruangan === kodeRuanganKonsul || (l.nama || "").toLowerCase().includes("konsul")
+    );
+    const consultWithPromo = rawConsultService
+      ? applyPromo({
+          ...rawConsultService,
+          jenis: "layanan",
+          harga: parseFloat(rawConsultService.harga || 0),
+        })
+      : null;
+    const effectiveConsultPrice = consultWithPromo ? consultWithPromo.harga : 15000;
+
     vaLayanan.forEach((lay) => {
       const kodeRuang = lay.kode_ruangan || "LAINNYA";
       let rngObj = ruanganMap.get(kodeRuang);
@@ -573,11 +587,13 @@ const handleGetOptions = async (req, res) => {
         harga: parseFloat(lay.harga || 0),
         durasi_menit: parseInt(lay.durasi_menit || 30, 10),
         tipe: (lay.tipe || "BEAUTY TREATMENT").toString().trim().toUpperCase(),
+        is_include_konsultasi: Boolean(lay.is_include_konsultasi === 1 || lay.is_include_konsultasi === "1" || lay.is_include_konsultasi === true),
         kode_ruangan: lay.kode_ruangan || "",
         nama_ruangan: lay.nama_ruangan || lay.kode_ruangan || "Ruang Treatment",
         wajib_konsultasi: lay.wajib_konsultasi || "tidak",
         kode_ruangan_konsultasi: lay.kode_ruangan_konsultasi || "",
         is_konsultasi: Number(lay.is_konsultasi || 0),
+        harga_konsultasi: effectiveConsultPrice,
         // Validasi petugas jaga hari ini
         is_petugas_available: isPetugasAvailable,
         alasan_tidak_tersedia: alasanTidakTersedia,
@@ -669,9 +685,11 @@ const handleGetOptions = async (req, res) => {
         masa_berlaku_hari: pkt.masa_berlaku_hari,
         total_sesi: totalSesi,
         tipe: (pkt.tipe || "BEAUTY TREATMENT").toString().trim().toUpperCase(),
+        is_include_konsultasi: Boolean(pkt.is_include_konsultasi === 1 || pkt.is_include_konsultasi === "1" || pkt.is_include_konsultasi === true),
         kode_ruangan: pkt.kode_ruangan || "",
         nama_ruangan: pkt.nama_ruangan || pkt.kode_ruangan || "Ruang Treatment",
         is_konsultasi: Number(pkt.is_konsultasi || 0),
+        harga_konsultasi: effectiveConsultPrice,
         // Validasi petugas jaga hari ini
         is_petugas_available: isPetugasAvailable,
         alasan_tidak_tersedia: alasanTidakTersedia,
@@ -742,6 +760,9 @@ const handleGetOptions = async (req, res) => {
         ruang_konsultasi: {
           kode_ruangan: kodeRuanganKonsul,
           nama_ruangan: namaRuanganKonsul,
+          kode_layanan: consultWithPromo?.kode_layanan || "LAY-011",
+          nama_layanan: consultWithPromo?.nama || "Konsultasi Dokter",
+          harga_konsultasi: effectiveConsultPrice,
         },
         semua_ruangan: vaRuangan,
         ruangan_layanan: resultRuangan,

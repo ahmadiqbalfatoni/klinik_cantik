@@ -17,6 +17,7 @@ import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 const Page = () => {
     const router = useRouter();
@@ -517,39 +518,13 @@ const Page = () => {
                                 </div>
                             </div>
 
-                            {/* STATUS LEGEND BAR */}
-                            <div className="flex flex-wrap align-items-center gap-3 px-2 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                                <span className="flex align-items-center gap-1 font-bold">
-                                    <i className="pi pi-info-circle" />
-                                    <span>KETERANGAN STATUS:</span>
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span
-                                        style={{
-                                            display: 'inline-block',
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '3px',
-                                            backgroundColor: '#22c55e',
-                                            boxShadow: '0 1px 3px #22c55e55',
-                                        }}
-                                    />
-                                    Aktif &amp; Berlaku
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span
-                                        style={{
-                                            display: 'inline-block',
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '3px',
-                                            backgroundColor: '#ef4444',
-                                            boxShadow: '0 1px 3px #ef444455',
-                                        }}
-                                    />
-                                    Tidak Aktif / Berakhir
-                                </span>
-                            </div>
+                            <KeteranganStatus
+                                className="mb-2"
+                                items={[
+                                    { label: 'Aktif & Berlaku', color: '#22c55e' },
+                                    { label: 'Tidak Aktif / Berakhir', color: '#ef4444' },
+                                ]}
+                            />
                         </div>
                     }
                 >
@@ -558,8 +533,8 @@ const Page = () => {
 
                     {/* Status Column */}
                     <Column
-                        header="Status"
-                        headerStyle={{ width: '4rem', textAlign: 'center' }}
+                        header=""
+                        headerStyle={{ width: '3rem', textAlign: 'center' }}
                         bodyStyle={{ textAlign: 'center' }}
                         body={(r) => {
                             const sisa = r.sisa_hari !== undefined ? parseInt(r.sisa_hari, 10) : 0;

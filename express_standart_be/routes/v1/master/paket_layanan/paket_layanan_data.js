@@ -95,6 +95,7 @@ router.post("/", async (req, res) => {
       "p.kode_paket_layanan",
       "p.nama",
       "p.tipe",
+      "p.is_include_konsultasi",
       "p.harga_paket",
       "p.masa_berlaku_hari",
       "p.is_masa_berlaku_selamanya",

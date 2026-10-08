@@ -163,7 +163,7 @@ const Page = () => {
                 </TabPanel>
 
                 <TabPanel
-                    header="Pemanggilan Antrean"
+                    header="Antrean Manual"
                     leftIcon="pi pi-volume-up mr-2"
                 >
                     <GridPanggil

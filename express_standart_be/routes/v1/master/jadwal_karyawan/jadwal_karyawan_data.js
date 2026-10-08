@@ -58,6 +58,14 @@ router.post("/", async (req, res) => {
         if (filterHari) qb.where("j.hari", filterHari);
         if (filterStatus) qb.where("j.status", filterStatus);
         if (filterKodeRuangan) qb.where("j.kode_ruangan", filterKodeRuangan);
+        if (oPayload.jabatan) qb.where("k.jabatan", oPayload.jabatan);
+        if (oPayload.tipe === "kasir" || oPayload.is_kasir === true) {
+          qb.where("k.jabatan", "kasir");
+        } else if (oPayload.tipe === "ruangan") {
+          qb.where(function () {
+            this.whereNull("k.jabatan").orWhereNot("k.jabatan", "kasir");
+          });
+        }
       });
 
     const selectFields = [

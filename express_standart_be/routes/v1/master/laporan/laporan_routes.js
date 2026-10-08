@@ -1654,7 +1654,7 @@ router.post("/komisi", async (req, res) => {
 });
 
 /**
- * 18. LAPORAN EXPIRED
+ * 18. LAPORAN EXPIRED (MULTI-BATCH)
  */
 router.post("/expired", async (req, res) => {
   const { body } = req;
@@ -1666,63 +1666,78 @@ router.post("/expired", async (req, res) => {
   const offset = (page - 1) * perPage;
 
   try {
-    const baseQuery = DB("mst_produk as p")
+    const baseQuery = DB("mst_produk_batch as b")
+      .leftJoin("mst_produk as p", "b.kode_produk", "p.kode_produk")
+      .leftJoin("mst_supplier as s", "b.kode_supplier", "s.kode_supplier")
       .whereRaw("p.kode_produk NOT LIKE 'CUSTOM-%' AND p.kode_produk NOT LIKE 'CST-%'")
+      .where("b.status", "aktif")
+      .where("b.stok_sisa", ">", 0)
       .modify((qb) => {
         if (branchCode) {
-          qb.where("p.kode_cabang", branchCode);
+          qb.where(function () {
+            this.where("b.kode_cabang", branchCode).orWhere("p.kode_cabang", branchCode);
+          });
         }
         if (keyword) {
           const lower = keyword.toLowerCase();
           qb.where(function () {
             this.whereRaw("LOWER(p.kode_produk) LIKE ?", [`%${lower}%`])
               .orWhereRaw("LOWER(p.nama) LIKE ?", [`%${lower}%`])
-              .orWhereRaw("LOWER(p.no_batch) LIKE ?", [`%${lower}%`]);
+              .orWhereRaw("LOWER(b.no_batch) LIKE ?", [`%${lower}%`])
+              .orWhereRaw("LOWER(b.kode_batch) LIKE ?", [`%${lower}%`]);
           });
         }
       });
 
-    const allProducts = await baseQuery.clone().select(
-      "p.id",
-      "p.kode_produk",
+    const allBatches = await baseQuery.clone().select(
+      "b.id",
+      "b.kode_batch",
+      "b.kode_produk",
       "p.nama as nama_produk",
-      "p.no_batch",
-      "p.tanggal_kadaluarsa",
-      "p.stok_tersedia",
+      "b.no_batch",
+      "b.tanggal_kadaluarsa",
+      "b.stok_masuk",
+      "b.stok_sisa",
+      "b.harga_beli_satuan",
       "p.satuan",
-      "p.status"
+      "b.is_legacy_estimate",
+      "b.status",
+      "s.nama as nama_supplier"
     );
 
     const now = new Date();
-    const mappedWithStatus = allProducts.map((p) => {
-      let statusExp = "belum_diisi";
+    const mappedWithStatus = allBatches.map((b) => {
+      let statusExp = "aman";
       let sisaHari = null;
-      if (p.tanggal_kadaluarsa) {
-        const expDate = new Date(p.tanggal_kadaluarsa);
+      if (b.tanggal_kadaluarsa) {
+        const expDate = new Date(b.tanggal_kadaluarsa);
         sisaHari = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        if (sisaHari < 30) {
+        if (sisaHari < 0) {
+          statusExp = "kadaluarsa";
+        } else if (sisaHari <= 30) {
           statusExp = "kritis";
-        } else if (sisaHari < 90) {
+        } else if (sisaHari <= 90) {
           statusExp = "perhatian";
         } else {
           statusExp = "aman";
         }
       }
       return {
-        ...p,
+        ...b,
         sisa_hari: sisaHari,
         status_expired: statusExp,
-        stok_tersedia: parseInt(p.stok_tersedia || 0, 10),
+        stok_tersedia: parseInt(b.stok_sisa || 0, 10),
+        nilai_aset_batch: parseInt(b.stok_sisa || 0, 10) * parseFloat(b.harga_beli_satuan || 0),
       };
     });
 
-    const filtered = mappedWithStatus.filter((p) => {
+    const filtered = mappedWithStatus.filter((b) => {
       if (!filterStatusExpired || filterStatusExpired === "ALL") return true;
-      if (Array.isArray(filterStatusExpired)) return filterStatusExpired.includes(p.status_expired);
-      return p.status_expired === filterStatusExpired;
+      if (Array.isArray(filterStatusExpired)) return filterStatusExpired.includes(b.status_expired);
+      return b.status_expired === filterStatusExpired;
     });
 
-    const priorityMap = { kritis: 1, perhatian: 2, aman: 3, belum_diisi: 4 };
+    const priorityMap = { kadaluarsa: 1, kritis: 2, perhatian: 3, aman: 4 };
     filtered.sort((a, b) => {
       const pDiff = (priorityMap[a.status_expired] || 5) - (priorityMap[b.status_expired] || 5);
       if (pDiff !== 0) return pDiff;
@@ -1733,24 +1748,27 @@ router.post("/expired", async (req, res) => {
     const totalData = filtered.length;
     const paginated = filtered.slice(offset, offset + perPage);
 
-    const totalProduk = mappedWithStatus.length;
-    const kritis = mappedWithStatus.filter((p) => p.status_expired === "kritis").length;
-    const perhatian = mappedWithStatus.filter((p) => p.status_expired === "perhatian").length;
-    const aman = mappedWithStatus.filter((p) => p.status_expired === "aman").length;
-    const belumDiisi = mappedWithStatus.filter((p) => p.status_expired === "belum_diisi").length;
+    const totalBatch = mappedWithStatus.length;
+    const kadaluarsa = mappedWithStatus.filter((b) => b.status_expired === "kadaluarsa").length;
+    const kritis = mappedWithStatus.filter((b) => b.status_expired === "kritis").length;
+    const perhatian = mappedWithStatus.filter((b) => b.status_expired === "perhatian").length;
+    const aman = mappedWithStatus.filter((b) => b.status_expired === "aman").length;
+    const perkiraanCount = mappedWithStatus.filter((b) => b.is_legacy_estimate === 1).length;
 
     return res.status(200).json({
       status: status.SUKSES,
-      message: "Data Laporan Expired berhasil dimuat",
+      message: "Data Laporan Expired Multi-Batch berhasil dimuat",
       datetime: formatDateSystem(),
       data: paginated,
       total_data: totalData,
       summary: {
-        total_produk: totalProduk,
+        total_produk: totalBatch,
+        total_batch: totalBatch,
+        kadaluarsa,
         kritis,
         perhatian,
         aman,
-        belum_diisi: belumDiisi,
+        perkiraan_count: perkiraanCount,
       },
     });
   } catch (err) {

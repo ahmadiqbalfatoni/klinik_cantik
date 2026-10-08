@@ -18,6 +18,7 @@ import { Dialog } from 'primereact/dialog';
 import { useRouter } from 'next/navigation';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess, formatRupiah } from '@/lib/tools/generalTools';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 export default function MonitoringCabangPage() {
     const router = useRouter();
@@ -256,19 +257,7 @@ export default function MonitoringCabangPage() {
                 </div>
 
                 {/* Legend Box Status */}
-                <div className="flex flex-wrap align-items-center gap-4 mb-3 p-3 surface-50 border-round-xl border-1 surface-border">
-                    <span className="flex align-items-center text-xs font-bold text-500 uppercase tracking-wider mr-2">
-                        <i className="pi pi-info-circle mr-2"></i> Keterangan Status Cabang:
-                    </span>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-green-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Aktif Beroperasi</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-red-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Tidak Aktif</span>
-                    </div>
-                </div>
+                <KeteranganStatus className="mb-3" />
 
                 <DataTable
                     value={filteredBranches}

@@ -108,6 +108,7 @@ router.post("/", upload.any(), async (req, res) => {
         else if (tipe === "SERVICE TREATMENT") wajibKonsul = "tidak";
         else wajibKonsul = "opsional";
       }
+      const isIncludeKonsul = oPayload.is_include_konsultasi === 1 || oPayload.is_include_konsultasi === "1" || oPayload.is_include_konsultasi === true || oPayload.is_include_konsultasi === "true" ? 1 : 0;
       const oData = {
         kode_cabang: branchCode,
         kode_layanan: kodeLayanan,
@@ -115,6 +116,7 @@ router.post("/", upload.any(), async (req, res) => {
         kode_ruangan: oPayload.kode_ruangan || null,
         wajib_konsultasi: wajibKonsul,
         kode_ruangan_konsultasi: wajibKonsul !== "tidak" ? (oPayload.kode_ruangan_konsultasi || null) : null,
+        is_include_konsultasi: isIncludeKonsul,
         nama: oPayload.nama,
         tipe: tipe,
         harga: oPayload.harga,

@@ -45,7 +45,7 @@ const LaporanContent: React.FC = () => {
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full laporan-page-container">
       {/* ─── MODUL OPERASIONAL AKTIF DARI DATABASE ─── */}
       {activeModule === 'penjualan' && <LaporanPenjualanView />}
       {activeModule === 'treatment' && <LaporanTreatmentView />}
@@ -67,6 +67,39 @@ const LaporanContent: React.FC = () => {
       {activeModule === 'crm' && <LaporanCrmView />}
       {activeModule === 'keuangan' && <LaporanKeuanganView />}
       {activeModule === 'rekam_medis' && <LaporanRekamMedisView />}
+
+      <style jsx global>{`
+        .laporan-page-container .p-datatable-table {
+          min-width: 950px !important;
+          max-width: 1080px !important;
+        }
+        .laporan-page-container .p-datatable-tbody > tr {
+          height: 52px !important;
+        }
+        .laporan-page-container .p-datatable-tbody > tr > td {
+          white-space: nowrap !important;
+          height: 52px !important;
+          max-height: 52px !important;
+          box-sizing: border-box !important;
+          vertical-align: middle !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          padding-top: 0.5rem !important;
+          padding-bottom: 0.5rem !important;
+        }
+        .laporan-page-container .p-datatable-thead > tr > th {
+          white-space: nowrap !important;
+          height: 48px !important;
+          box-sizing: border-box !important;
+          vertical-align: middle !important;
+        }
+        .laporan-page-container .p-datatable-row-expansion > td {
+          height: auto !important;
+          max-height: none !important;
+          white-space: normal !important;
+          overflow: visible !important;
+        }
+      `}</style>
     </div>
   );
 };

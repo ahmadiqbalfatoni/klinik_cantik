@@ -78,6 +78,7 @@ router.post("/", async (req, res) => {
       "l.wajib_konsultasi",
       "l.kode_ruangan_konsultasi",
       "r_konsul.nama_ruangan as nama_ruangan_konsultasi",
+      "l.is_include_konsultasi",
       "l.nama",
       "l.harga",
       "l.durasi_menit",

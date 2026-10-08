@@ -92,12 +92,9 @@ export const FormRuanganFotoUploader: React.FC<FormRuanganFotoUploaderProps> = (
         if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
             return path;
         }
-        const rawUrl = process.env.NEXT_PUBLIC_API_URL || '';
-        const beUrl = rawUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
-        if (beUrl && !beUrl.includes('localhost') && !beUrl.includes('127.0.0.1')) {
-            return `${beUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-        }
-        return path.startsWith('/') ? path : `/${path}`;
+        const beUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        const baseUrl = beUrl.replace(/\/$/, '');
+        return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
     };
 
     return (

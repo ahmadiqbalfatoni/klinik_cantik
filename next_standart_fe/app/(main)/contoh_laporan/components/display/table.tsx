@@ -21,6 +21,7 @@ import { formatDateSystem } from '@/lib/tools/dateTools';
 import { formatCurrency, showSuccess } from '@/lib/tools/generalTools';
 import { TableData, TableProps } from '../interfaces';
 import { apiEndpointGet } from '../endpoints';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 // Opsi default filter status pekerjaan servis
 const DEFAULT_STATUS_OPTIONS = [
@@ -495,40 +496,20 @@ const Table = ({
                     />
                 </div>
 
-                {/* Legend Box Status Pekerjaan Servis dengan Kode Warna Terbaru */}
-                <div className="flex flex-wrap align-items-center gap-4 mb-3 p-3 surface-50 border-round-xl border-1 surface-border">
-                    <span className="flex align-items-center text-xs font-bold text-500 uppercase tracking-wider mr-2">
-                        <i className="pi pi-info-circle mr-2"></i> Keterangan Status Servis:
-                    </span>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-gray-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Menunggu</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-blue-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Pengecekan</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-yellow-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Pengerjaan</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-orange-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Menunggu Suku Cadang</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-teal-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Selesai</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-green-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Sudah Diambil</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-red-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Batal</span>
-                    </div>
-                </div>
+                {/* Legend Box Status Pekerjaan Servis */}
+                <KeteranganStatus
+                    className="mb-3"
+                    title="KETERANGAN STATUS SERVIS:"
+                    items={[
+                        { label: 'Menunggu', color: '#6b7280' },
+                        { label: 'Pengecekan', color: '#3b82f6' },
+                        { label: 'Pengerjaan', color: '#eab308' },
+                        { label: 'Menunggu Suku Cadang', color: '#f97316' },
+                        { label: 'Selesai', color: '#14b8a6' },
+                        { label: 'Sudah Diambil', color: '#22c55e' },
+                        { label: 'Batal', color: '#ef4444' },
+                    ]}
+                />
 
                 <DataTable
                     value={state.data}

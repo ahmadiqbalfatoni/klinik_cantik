@@ -136,6 +136,17 @@ export const handleDetail = async (req, res) => {
     trx.metode_pembayaran_dp = resolvedMetodeDp;
     trx.sisa_bayar = resolvedSisaBayar;
 
+    // Cek kolom diskon snapshot secara aman
+    const hasDiscountCols = await DB.schema.hasColumn("trx_detail_transaksi", "kode_promo");
+    const promoSelectCols = hasDiscountCols ? [
+      "dt.kode_promo",
+      "dt.nama_promo",
+      "dt.jenis_diskon",
+      "dt.nilai_diskon",
+      "dt.diskon",
+      "dt.subtotal_setelah_diskon",
+    ] : [];
+
     // Ambil detail item dengan flag is_from_pendaftaran
     const details = await DB("trx_detail_transaksi as dt")
       .leftJoin("mst_layanan as l", "dt.kode_layanan", "l.kode_layanan")
@@ -151,7 +162,8 @@ export const handleDetail = async (req, res) => {
         "dt.qty",
         "dt.harga_satuan",
         "dt.subtotal",
-        DB.raw("COALESCE(dt.is_from_pendaftaran, 0) as is_from_pendaftaran")
+        DB.raw("COALESCE(dt.is_from_pendaftaran, 0) as is_from_pendaftaran"),
+        ...promoSelectCols
       )
       .orderBy("dt.is_from_pendaftaran", "desc")
       .orderBy("dt.id", "asc");
@@ -163,6 +175,12 @@ export const handleDetail = async (req, res) => {
       nama: d.nama_layanan || d.nama_produk || "-",
       satuan: d.satuan || (d.kode_layanan ? "tindakan" : "pcs"),
       is_from_pendaftaran: Boolean(d.is_from_pendaftaran),
+      kode_promo: d.kode_promo || null,
+      nama_promo: d.nama_promo || null,
+      jenis_diskon: d.jenis_diskon || null,
+      nilai_diskon: d.nilai_diskon != null ? parseFloat(d.nilai_diskon) : null,
+      diskon: d.diskon != null ? parseFloat(d.diskon) : 0,
+      subtotal_setelah_diskon: d.subtotal_setelah_diskon != null ? parseFloat(d.subtotal_setelah_diskon) : parseFloat(d.subtotal),
     }));
 
     return res.status(200).json({

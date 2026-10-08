@@ -49,6 +49,12 @@ const TRANSISI_STATUS = {
     errorMsg: (no, current) =>
       `Nomor ${no} tidak dapat diselesaikan karena status saat ini: ${current}. Harus dipanggil dulu.`,
   },
+  lewati: {
+    from: ["dipanggil", "diambil"],
+    label: "Lewati antrean (selesai/dilewati)",
+    errorMsg: (no, current) =>
+      `Nomor ${no} tidak dapat dilewati karena status saat ini: ${current}`,
+  },
 };
 
 router.post("/", async (req, res) => {
@@ -70,14 +76,14 @@ router.post("/", async (req, res) => {
       {
         kode_antrian: Joi.string().required().label("Kode Antrian"),
         aksi: Joi.string()
-          .valid("diambil", "dipanggil", "selesai")
+          .valid("diambil", "dipanggil", "selesai", "lewati")
           .required()
           .label("Aksi"),
       },
       {
         "string.base": "{#label} harus berupa teks",
         "string.empty": "{#label} tidak boleh kosong",
-        "any.only": "{#label} tidak valid. Pilih: diambil / dipanggil / selesai",
+        "any.only": "{#label} tidak valid. Pilih: diambil / dipanggil / selesai / lewati",
         "any.required": "{#label} wajib diisi",
       },
       oPayload,
@@ -111,7 +117,7 @@ router.post("/", async (req, res) => {
       }
 
       let currentFrontendStatus = "tersedia";
-      if (record.status === "terpakai") {
+      if (record.status === "terpakai" || record.status === "dilewati") {
         currentFrontendStatus = record.dipanggil_at ? "selesai" : "diambil";
       } else if (record.status === "dipanggil") {
         currentFrontendStatus = "dipanggil";
@@ -156,7 +162,7 @@ router.post("/", async (req, res) => {
         newDbStatus = "dipanggil";
         newDiambilAt = newDiambilAt || formatDateSystem();
         newDipanggilAt = formatDateSystem();
-      } else if (aksi === "selesai") {
+      } else if (aksi === "selesai" || aksi === "lewati") {
         newDbStatus = "terpakai";
         newDipanggilAt = newDipanggilAt || formatDateSystem();
       }
@@ -165,6 +171,8 @@ router.post("/", async (req, res) => {
         status: newDbStatus,
         diambil_at: newDiambilAt,
         dipanggil_at: newDipanggilAt,
+        no_rm: null,
+        kode_kunjungan: null,
         updated_by: username,
         updated_at: formatDateSystem(),
       };
@@ -199,6 +207,7 @@ router.post("/", async (req, res) => {
       diambil: `Nomor antrian ${updatedRecord.no_antrian} berhasil diambil pasien`,
       dipanggil: `Nomor antrian ${updatedRecord.no_antrian} berhasil dipanggil`,
       selesai: `Nomor antrian ${updatedRecord.no_antrian} selesai dilayani`,
+      lewati: `Nomor antrian ${updatedRecord.no_antrian} telah dilewati (selesai)`,
     };
 
     return res.status(200).json({

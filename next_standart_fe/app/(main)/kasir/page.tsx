@@ -7,10 +7,13 @@ import { useRouter } from 'next/navigation';
 import postData from '@/lib/axios/postData';
 import { showError } from '@/lib/tools/generalTools';
 
+import { Button } from 'primereact/button';
+
 import { KasirSidebar } from './components/KasirSidebar';
 import { KasirPOSPanel } from './components/KasirPOSPanel';
 import { KasirBayarModal } from './components/KasirBayarModal';
 import { KasirStrukModal } from './components/KasirStrukModal';
+import { KasirShiftHeader } from './components/KasirShiftHeader';
 
 export interface CartItem {
   jenis: 'layanan' | 'produk';
@@ -21,14 +24,16 @@ export interface CartItem {
   qty: number;
   harga_satuan: number;
   harga_master?: number | null;
+  dal_harga?: number | null;
   subtotal: number;
   is_promo?: boolean;
   kode_promo_item?: string;
   is_from_pendaftaran?: boolean;
+  is_free_include?: boolean;
   // Info promo per-item dari pendaftaran (diskon diterapkan di kasir)
   kode_promo?: string | null;
   nama_promo?: string | null;
-  jenis_diskon?: 'persen' | 'nominal' | null;
+  jenis_diskon?: 'persen' | 'nominal' | 'include_treatment' | string | null;
   nilai_diskon?: number | null;
   diskon?: number | null;
   subtotal_setelah_diskon?: number | null;
@@ -82,6 +87,11 @@ export default function KasirPage() {
     }
   }, [session, router]);
 
+  // State shift & schedule kasir
+  const [isAccessAllowed, setIsAccessAllowed] = useState(true);
+  const [isShiftOpen, setIsShiftOpen] = useState(false);
+  const [shiftRefreshKey, setShiftRefreshKey] = useState(0);
+
   // State sidebar
   const [transaksiList, setTransaksiList] = useState<TransaksiListItem[]>([]);
   const [selectedKodeTrx, setSelectedKodeTrx] = useState<string | null>(null);
@@ -108,29 +118,38 @@ export default function KasirPage() {
     total_diskon?: number;
   } | null>(null);
 
+  const handleShiftStateChange = useCallback((allowed: boolean, isOpen: boolean) => {
+    setIsAccessAllowed((prev) => (prev !== allowed ? allowed : prev));
+    setIsShiftOpen((prev) => (prev !== isOpen ? isOpen : prev));
+  }, []);
+
   const refreshList = useCallback(() => {
     setListRefreshKey((k) => k + 1);
   }, []);
 
-  const handleSelectTrx = (kode: string) => {
+  const handleSelectTrx = useCallback((kode: string) => {
     setSelectedKodeTrx(kode);
-  };
+  }, []);
 
-  const handleNewTrx = () => {
+  const handleNewTrx = useCallback(() => {
     setSelectedKodeTrx(null);
-  };
+  }, []);
 
-  const handleDraftSaved = (kode_transaksi: string) => {
+  const handleDraftSaved = useCallback((kode_transaksi: string) => {
     setSelectedKodeTrx(kode_transaksi);
     refreshList();
-  };
+  }, [refreshList]);
 
-  const handleOpenBayar = (payload: typeof pendingBayarPayload) => {
+  const handleOpenBayar = useCallback((payload: typeof pendingBayarPayload) => {
     setPendingBayarPayload(payload);
     setShowBayarModal(true);
-  };
+  }, []);
 
-  const handleBayarConfirm = async (metode: string, nominal: number) => {
+  const handleListChange = useCallback((list: TransaksiListItem[]) => {
+    setTransaksiList(list);
+  }, []);
+
+  const handleBayarConfirm = useCallback(async (metode: string, nominal: number) => {
     if (!pendingBayarPayload) return;
     try {
       const res = await postData('/master/kasir-bayar', {
@@ -154,21 +173,57 @@ export default function KasirPage() {
         setShowStrukModal(true);
         setSelectedKodeTrx(null);
         refreshList();
+        setShiftRefreshKey((k) => k + 1);
       } else {
         showError(toast, res?.data?.message || 'Pembayaran gagal');
       }
     } catch {
       showError(toast, 'Gagal terhubung ke server');
     }
-  };
+  }, [pendingBayarPayload, refreshList]);
 
   return (
-    <div className="w-full h-full kasir-page-container" style={{ minHeight: 0, minWidth: 0 }}>
+    <div className="w-full h-full kasir-page-container flex flex-column" style={{ minHeight: 0, minWidth: 0 }}>
+      <Toast ref={toast} position="top-right" />
+
+      {/* SHIFT & SCHEDULE HEADER BAR */}
+      <KasirShiftHeader
+        toast={toast}
+        refreshKey={shiftRefreshKey}
+        onShiftStateChange={handleShiftStateChange}
+      />
+
       <div
-        className="flex flex-column lg:flex-row gap-3 h-full w-full kasir-main-layout"
-        style={{ minHeight: 0, minWidth: 0 }}
+        className="flex flex-column lg:flex-row gap-3 h-full w-full kasir-main-layout relative"
+        style={{ minHeight: 0, minWidth: 0, flex: 1 }}
       >
-        <Toast ref={toast} position="top-right" />
+        {/* LOCK OVERLAY IF CASHIER IS OUTSIDE WORKING SCHEDULE */}
+        {!isAccessAllowed && (
+          <div
+            className="absolute inset-0 z-5 flex flex-column align-items-center justify-content-center border-round-xl"
+            style={{ backgroundColor: 'rgba(255, 255, 255, 0.88)', backdropFilter: 'blur(3px)' }}
+          >
+            <div className="p-4 border-round-xl bg-white shadow-4 border-1 surface-border text-center max-w-md mx-3">
+              <div className="w-4rem h-4rem border-round-circle bg-red-100 flex align-items-center justify-content-center text-red-600 mx-auto mb-3">
+                <i className="pi pi-lock text-3xl" />
+              </div>
+              <h4 className="font-bold text-900 mb-1">Fitur Kasir Terkunci</h4>
+              <p className="text-500 text-xs mb-3">
+                Anda belum dapat mengakses transaksi kasir karena saat ini belum memasuki jadwal shift kerja Anda.
+              </p>
+              <div className="flex justify-content-center gap-2">
+                <Button
+                  label="Cek Ulang Status Jadwal"
+                  icon="pi pi-refresh"
+                  size="small"
+                  severity="danger"
+                  onClick={() => setShiftRefreshKey((k) => k + 1)}
+                  className="text-xs font-bold border-round-md px-3"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* SIDEBAR KIRI: Daftar Transaksi & Stat */}
         <div className="h-full overflow-hidden border-round-xl shadow-1 border-1 surface-border kasir-sidebar-wrapper">
@@ -178,7 +233,7 @@ export default function KasirPage() {
             refreshKey={listRefreshKey}
             onSelectTrx={handleSelectTrx}
             onNewTrx={handleNewTrx}
-            onListChange={setTransaksiList}
+            onListChange={handleListChange}
           />
         </div>
 

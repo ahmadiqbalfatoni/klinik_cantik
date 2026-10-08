@@ -25,7 +25,6 @@ export const MASTER_FULL_MENU = [
             { label: "Kategori Produk", icon: "pi pi-fw pi-tags", to: "/master-data/kategori-produk" },
             { label: "Data Produk", icon: "pi pi-fw pi-box", to: "/master-data/produk" },
             { label: "Paket Produk", icon: "pi pi-fw pi-inbox", to: "/master-data/paket-produk" },
-            { label: "Inventori", icon: "pi pi-fw pi-box", to: "/master-data/inventori" },
             { label: "Supplier", icon: "pi pi-fw pi-truck", to: "/master-data/supplier" },
             { label: "Karyawan", icon: "pi pi-fw pi-users", to: "/master-data/karyawan" },
             { label: "Jadwal Karyawan", icon: "pi pi-fw pi-calendar-times", to: "/master-data/jadwal-karyawan" },
@@ -55,10 +54,11 @@ export const MASTER_FULL_MENU = [
         ]
     },
     {
-        label: "KASIR",
+        label: "TRANSAKSI",
         icon: "pi pi-fw pi-calculator",
         items: [
-            { label: "Kasir", icon: "pi pi-fw pi-calculator", to: "/kasir" }
+            { label: "Kasir", icon: "pi pi-fw pi-calculator", to: "/kasir" },
+            { label: "Inventori", icon: "pi pi-fw pi-box", to: "/master-data/inventori" }
         ]
     },
     {

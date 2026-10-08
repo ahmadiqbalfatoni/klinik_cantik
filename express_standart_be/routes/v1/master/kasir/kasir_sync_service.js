@@ -4,7 +4,8 @@
  * @file kasir_sync_service.js
  * @description Helper terpusat untuk sinkronisasi draf transaksi Kasir dan item layanan/produk
  *              dari trx_detail_antrian_layanan.
- *              Mengimplementasikan deduplikasi rujukan konsultasi -> tindakan secara otomatis.
+ *              Mengimplementasikan deduplikasi rujukan konsultasi -> tindakan secara otomatis
+ *              serta fitur Include Biaya Konsultasi (Gratis Konsul jika tindakan include = 1).
  */
 
 import DB from "../../../../core/config/knex.js";
@@ -12,8 +13,10 @@ import { formatDateSystem } from "../../components/tools/date_tools.js";
 
 /**
  * Mengambil SEMUA item layanan dari antrean yang berstatus 'selesai' untuk satu atau beberapa kunjungan,
- * dengan DEDUPLIKASI OTOMATIS: Item layanan pada antrean konsultasi asal yang sudah diteruskan
- * ke antrean rujukan anak (ruang tindakan lanjutan) HANYA diambil 1 kali dari antrean tindakan final.
+ * dengan DEDUPLIKASI OTOMATIS & EVALUASI INCLUDE KONSULTASI:
+ * 1. Deduplikasi: Item layanan pendaftaran yang diteruskan ke antrean rujukan anak hanya diambil 1x.
+ * 2. Include Konsultasi: Jika antrean konsultasi memiliki antrean anak (tindakan lanjutan) yang statusnya
+ *    selesai dan memiliki is_include_konsultasi = 1, item konsultasi otomatis digratiskan (Diskon 100%).
  *
  * @param {import('knex').Knex | import('knex').Knex.Transaction} dbOrTrx
  * @param {string | string[]} kodeKunjungan
@@ -24,8 +27,10 @@ export const getCompletedItemsForKasir = async (dbOrTrx, kodeKunjungan) => {
     return [];
   }
 
+  // 1. Ambil semua baris detail antrean dari antrean yang berstatus 'selesai'
   let query = dbOrTrx("trx_detail_antrian_layanan as dal")
     .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
+    .leftJoin("mst_ruangan as r", "al.kode_ruangan", "r.kode_ruangan")
     .leftJoin("mst_layanan as l", "dal.kode_layanan", "l.kode_layanan")
     .leftJoin("mst_paket_layanan as pl", "dal.kode_layanan", "pl.kode_paket_layanan")
     .leftJoin("mst_produk as prod", "dal.kode_layanan", "prod.kode_produk")
@@ -40,9 +45,13 @@ export const getCompletedItemsForKasir = async (dbOrTrx, kodeKunjungan) => {
     })
     .select(
       "al.kode_kunjungan",
+      "al.kode_antrian_layanan",
+      "al.kode_antrian_asal",
+      "al.kode_ruangan",
+      "al.kode_karyawan",
+      "r.is_konsultasi",
       "dal.id",
       "dal.kode_detail_antrian_layanan",
-      "dal.kode_antrian_layanan",
       "dal.kode_layanan",
       "dal.nama_layanan",
       "dal.harga",
@@ -52,7 +61,9 @@ export const getCompletedItemsForKasir = async (dbOrTrx, kodeKunjungan) => {
       "dal.jenis_diskon",
       "dal.nilai_diskon",
       "l.harga as master_harga_layanan",
+      "l.is_include_konsultasi as master_is_include_layanan",
       "pl.harga_paket as master_harga_paket",
+      "pl.is_include_konsultasi as master_is_include_paket",
       "prod.harga_jual as master_harga_produk"
     )
     .orderBy("dal.id", "asc");
@@ -63,13 +74,112 @@ export const getCompletedItemsForKasir = async (dbOrTrx, kodeKunjungan) => {
     query = query.where("al.kode_kunjungan", kodeKunjungan);
   }
 
-  return await query;
+  const rawItems = await query;
+  if (rawItems.length === 0) return [];
+
+  // 2. Kumpulkan semua antrean anak (rujukan aktif/selesai, tidak batal) untuk kunjungan ini
+  // Guna mengevaluasi apakah ada tindakan rujukan yang is_include_konsultasi = 1
+  const childQueues = await dbOrTrx("trx_antrian_layanan as child")
+    .join("trx_detail_antrian_layanan as cdal", "child.kode_antrian_layanan", "cdal.kode_antrian_layanan")
+    .leftJoin("mst_layanan as cl", "cdal.kode_layanan", "cl.kode_layanan")
+    .leftJoin("mst_paket_layanan as cpl", "cdal.kode_layanan", "cpl.kode_paket_layanan")
+    .whereNot("child.status", "batal")
+    .whereNotNull("child.kode_antrian_asal")
+    .modify((qb) => {
+      if (Array.isArray(kodeKunjungan)) {
+        qb.whereIn("child.kode_kunjungan", kodeKunjungan);
+      } else {
+        qb.where("child.kode_kunjungan", kodeKunjungan);
+      }
+    })
+    .select(
+      "child.kode_kunjungan",
+      "child.kode_antrian_layanan",
+      "child.kode_antrian_asal",
+      "cdal.kode_layanan",
+      "cdal.nama_layanan",
+      "cl.is_include_konsultasi as lay_include",
+      "cpl.is_include_konsultasi as pkt_include"
+    );
+
+  // Map relasi induk -> list tindakan anak & list tindakan per kunjungan
+  const parentChildrenMap = new Map();
+  const visitTreatmentsMap = new Map();
+
+  for (const cq of childQueues) {
+    const isInclude = cq.lay_include === 1 || cq.lay_include === "1" || cq.pkt_include === 1 || cq.pkt_include === "1";
+    if (cq.kode_antrian_asal) {
+      if (!parentChildrenMap.has(cq.kode_antrian_asal)) parentChildrenMap.set(cq.kode_antrian_asal, []);
+      parentChildrenMap.get(cq.kode_antrian_asal).push({ ...cq, isInclude });
+    }
+    if (cq.kode_kunjungan) {
+      if (!visitTreatmentsMap.has(cq.kode_kunjungan)) visitTreatmentsMap.set(cq.kode_kunjungan, []);
+      visitTreatmentsMap.get(cq.kode_kunjungan).push({ ...cq, isInclude });
+    }
+  }
+
+  // Juga cek tindakan dalam rawItems kunjungan ini (Pintu Masuk 2 / Multi-item)
+  for (const itm of rawItems) {
+    const isKonsul = Boolean(itm.is_konsultasi) ||
+      (itm.nama_layanan || "").toLowerCase().includes("konsul") ||
+      (itm.kode_layanan || "").toLowerCase().includes("konsul");
+    if (!isKonsul && itm.kode_kunjungan) {
+      const isInclude = itm.master_is_include_layanan === 1 || itm.master_is_include_layanan === "1" ||
+        itm.master_is_include_paket === 1 || itm.master_is_include_paket === "1";
+      if (!visitTreatmentsMap.has(itm.kode_kunjungan)) visitTreatmentsMap.set(itm.kode_kunjungan, []);
+      visitTreatmentsMap.get(itm.kode_kunjungan).push({ ...itm, isInclude });
+    }
+  }
+
+  // 3. Proses penyesuaian diskon Include Konsultasi:
+  // Bebas biaya konsultasi (Rp 0) HANYA jika SEMUA tindakan yang diambil adalah INCLUDE KONSULTASI (tidak ada yang non-include)
+  return rawItems.map((item) => {
+    const isConsultationQueue = Boolean(item.is_konsultasi) ||
+      (item.nama_layanan || "").toLowerCase().includes("konsul") ||
+      (item.kode_layanan || "").toLowerCase().includes("konsul");
+
+    if (isConsultationQueue) {
+      const relatedChildren = parentChildrenMap.get(item.kode_antrian_layanan) || [];
+      const relatedVisitTreatments = visitTreatmentsMap.get(item.kode_kunjungan) || [];
+      const allTreatments = relatedChildren.length > 0 ? relatedChildren : relatedVisitTreatments;
+
+      const hasTreatments = allTreatments.length > 0;
+      const isAllInclude = hasTreatments && allTreatments.every((t) => t.isInclude);
+
+      if (isAllInclude) {
+        // Skenario A: SEMUA TINDAKAN INCLUDE (Gratis Konsultasi Rp 0)
+        const promoPrice = parseFloat(item.harga || 0);
+        const hargaAsli = promoPrice > 0 ? promoPrice : parseFloat(item.master_harga_layanan || 0);
+        const firstName = allTreatments[0]?.nama_layanan || allTreatments[0]?.nama || "Tindakan Include";
+        return {
+          ...item,
+          is_free_include: true,
+          harga_satuan_gross: hargaAsli,
+          harga: 0,
+          diskon: 0,
+          jenis_diskon: "include_treatment",
+          nilai_diskon: 0,
+          kode_promo: null,
+          nama_promo: `Gratis (Include ${firstName})`,
+          subtotal_setelah_diskon: 0,
+        };
+      }
+    }
+
+    // Skenario B: NORMAL / NON-INCLUDE / HANYA KONSULTASI / ADA TINDAKAN NON-INCLUDE
+    const rawHarga = parseFloat(item.master_harga_layanan || item.master_harga_paket || item.master_harga_produk || item.harga || 0);
+    return {
+      ...item,
+      is_free_include: false,
+      harga_satuan_gross: rawHarga,
+    };
+  });
 };
 
 /**
  * Sinkronisasi terpusat ke trx_transaksi dan trx_detail_transaksi:
  * 1. Membuat atau memperbarui draf trx_transaksi.
- * 2. Memasukkan layanan pendaftaran/tindakan (yang sudah didedup).
+ * 2. Memasukkan layanan pendaftaran/tindakan (yang sudah didedup & disinkronkan include konsultasi).
  * 3. Memasukkan atau memperbarui produk tambahan rekomendasi dokter.
  * 4. Merekalibrasi diskon promo, DP booking, total_harga, total_bayar, dan sisa_bayar.
  *
@@ -187,23 +297,12 @@ export const syncCompletedItemsToKasirDraft = async (trx, {
     await trx("trx_transaksi").insert(newTrx);
   }
 
-  // 3. Ambil item layanan & produk antrean yang sudah berstatus 'selesai' (DEDUPLIKASI RUJUKAN)
+  // 3. Ambil item layanan & produk antrean yang sudah berstatus 'selesai' (DEDUPLIKASI & INCLUDE KONSULTASI)
   const completedItems = await getCompletedItemsForKasir(trx, kodeKunjungan);
 
-  // 4. Hitung detail yang sudah ada untuk sinkronisasi kuantitas yang idempotent
+  // 4. Hitung detail yang sudah ada untuk sinkronisasi yang idempotent
   const existingDetails = await trx("trx_detail_transaksi")
     .where("kode_transaksi", createdTransaksiKode);
-
-  const existingServiceCounts = {};
-  const existingProductCounts = {};
-  existingDetails.forEach((d) => {
-    if (d.kode_layanan) {
-      existingServiceCounts[d.kode_layanan] = (existingServiceCounts[d.kode_layanan] || 0) + 1;
-    }
-    if (d.kode_produk) {
-      existingProductCounts[d.kode_produk] = (existingProductCounts[d.kode_produk] || 0) + (d.qty || 1);
-    }
-  });
 
   const lastDetail = await trx("trx_detail_transaksi")
     .where("kode_detail_transaksi", "like", `${prefixDetail}%`)
@@ -219,101 +318,117 @@ export const syncCompletedItemsToKasirDraft = async (trx, {
 
   const hasDiscountCols = await trx.schema.hasColumn("trx_detail_transaksi", "kode_promo");
 
-  // Masukkan completedItems dari antrean layanan
+  // Masukkan / Perbarui completedItems dari antrean layanan
   for (const item of completedItems) {
-    if (item.kode_layanan) {
-      const isProduct = ["produk", "paket_produk"].includes((item.jenis_layanan || "").toLowerCase());
-      if (isProduct) {
-        const currentCount = existingProductCounts[item.kode_layanan] || 0;
-        if (currentCount > 0) {
-          existingProductCounts[item.kode_layanan]--;
-        } else {
-          const existRow = await trx("trx_detail_transaksi")
-            .where("kode_transaksi", createdTransaksiKode)
-            .where("kode_produk", item.kode_layanan)
-            .first();
+    if (!item.kode_layanan) continue;
 
-          if (existRow) {
-            const newQty = parseInt(existRow.qty || 1, 10) + 1;
-            const hrg = parseFloat(existRow.harga_satuan || item.harga || 0);
-            await trx("trx_detail_transaksi")
-              .where("id", existRow.id)
-              .update({
-                qty: newQty,
-                subtotal: newQty * hrg,
-                updated_by: username,
-                updated_at: formatDateSystem(),
-              });
-          } else {
-            const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
-            nextDetailSeq++;
-            const hargaSatuan = parseFloat(item.harga || 0);
+    const isProduct = ["produk", "paket_produk"].includes((item.jenis_layanan || "").toLowerCase());
+    if (isProduct) {
+      const existRow = existingDetails.find((d) => d.kode_produk === item.kode_layanan);
+      const hargaSatuan = parseFloat(item.harga || 0);
 
-            const insertPayload = {
-              kode_cabang: resolvedCabang,
-              kode_detail_transaksi: cKodeDetail,
-              kode_transaksi: createdTransaksiKode,
-              kode_layanan: null,
-              kode_produk: item.kode_layanan,
-              qty: 1,
-              harga_satuan: hargaSatuan,
-              subtotal: hargaSatuan,
-              is_from_pendaftaran: 1,
-              tz: tz || "Asia/Jakarta",
-              created_by: username,
-              created_at: formatDateSystem(),
-              updated_by: username,
-              updated_at: formatDateSystem(),
-            };
-            if (hasDiscountCols && item.kode_promo) {
-              insertPayload.kode_promo = item.kode_promo;
-              insertPayload.nama_promo = item.nama_promo || null;
-              insertPayload.jenis_diskon = item.jenis_diskon || null;
-              insertPayload.nilai_diskon = item.nilai_diskon != null ? parseFloat(item.nilai_diskon) : null;
-              insertPayload.diskon = 0;
-              insertPayload.subtotal_setelah_diskon = hargaSatuan;
-            }
-
-            await trx("trx_detail_transaksi").insert(insertPayload);
-          }
-        }
-      } else {
-        const currentCount = existingServiceCounts[item.kode_layanan] || 0;
-        if (currentCount > 0) {
-          existingServiceCounts[item.kode_layanan]--;
-        } else {
-          const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
-          nextDetailSeq++;
-          const isKlaim = (item.jenis_layanan || "").toLowerCase() === "klaim_paket";
-          const hargaSatuan = isKlaim ? 0 : parseFloat(item.harga || 0);
-
-          const insertPayload = {
-            kode_cabang: resolvedCabang,
-            kode_detail_transaksi: cKodeDetail,
-            kode_transaksi: createdTransaksiKode,
-            kode_layanan: item.kode_layanan,
-            kode_produk: null,
-            qty: 1,
+      if (existRow) {
+        await trx("trx_detail_transaksi")
+          .where("id", existRow.id)
+          .update({
             harga_satuan: hargaSatuan,
-            subtotal: hargaSatuan,
-            is_from_pendaftaran: 1,
-            tz: tz || "Asia/Jakarta",
-            created_by: username,
-            created_at: formatDateSystem(),
+            subtotal: hargaSatuan * (existRow.qty || 1),
             updated_by: username,
             updated_at: formatDateSystem(),
-          };
-          if (hasDiscountCols && item.kode_promo) {
-            insertPayload.kode_promo = item.kode_promo;
-            insertPayload.nama_promo = item.nama_promo || null;
-            insertPayload.jenis_diskon = item.jenis_diskon || null;
-            insertPayload.nilai_diskon = item.nilai_diskon != null ? parseFloat(item.nilai_diskon) : null;
-            insertPayload.diskon = 0;
-            insertPayload.subtotal_setelah_diskon = hargaSatuan;
-          }
+          });
+      } else {
+        const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
+        nextDetailSeq++;
 
-          await trx("trx_detail_transaksi").insert(insertPayload);
+        const insertPayload = {
+          kode_cabang: resolvedCabang,
+          kode_detail_transaksi: cKodeDetail,
+          kode_transaksi: createdTransaksiKode,
+          kode_layanan: null,
+          kode_produk: item.kode_layanan,
+          qty: 1,
+          harga_satuan: hargaSatuan,
+          subtotal: hargaSatuan,
+          is_from_pendaftaran: 1,
+          tz: tz || "Asia/Jakarta",
+          created_by: username,
+          created_at: formatDateSystem(),
+          updated_by: username,
+          updated_at: formatDateSystem(),
+        };
+        if (hasDiscountCols && item.kode_promo) {
+          insertPayload.kode_promo = item.kode_promo;
+          insertPayload.nama_promo = item.nama_promo || null;
+          insertPayload.jenis_diskon = item.jenis_diskon || null;
+          insertPayload.nilai_diskon = item.nilai_diskon != null ? parseFloat(item.nilai_diskon) : null;
+          insertPayload.diskon = 0;
+          insertPayload.subtotal_setelah_diskon = hargaSatuan;
         }
+
+        await trx("trx_detail_transaksi").insert(insertPayload);
+      }
+    } else {
+      // Layanan / Paket Layanan
+      const isKlaim = (item.jenis_layanan || "").toLowerCase() === "klaim_paket";
+      const isFreeInclude = Boolean(item.is_free_include);
+
+      let hargaSatuanGross = isKlaim || isFreeInclude ? 0 : parseFloat(item.harga_satuan_gross || item.master_harga_layanan || item.harga || 0);
+      let itemSubtotal = isKlaim || isFreeInclude ? 0 : hargaSatuanGross;
+      let itemDiskon = isFreeInclude ? 0 : (item.diskon || 0);
+      let itemSubtotalSetelahDiskon = isFreeInclude ? 0 : itemSubtotal;
+      let itemJenisDiskon = isFreeInclude ? "include_treatment" : (item.jenis_diskon || null);
+      let itemNilaiDiskon = isFreeInclude ? 0 : (item.nilai_diskon != null ? parseFloat(item.nilai_diskon) : null);
+      let itemNamaPromo = isFreeInclude ? "Gratis (Include Tindakan)" : (item.nama_promo || null);
+      let itemKodePromo = isFreeInclude ? null : (item.kode_promo || null);
+
+      const existRow = existingDetails.find((d) => d.kode_layanan === item.kode_layanan);
+
+      if (existRow) {
+        const updatePayload = {
+          harga_satuan: hargaSatuanGross,
+          subtotal: itemSubtotal,
+          updated_by: username,
+          updated_at: formatDateSystem(),
+        };
+        if (hasDiscountCols) {
+          updatePayload.kode_promo = itemKodePromo;
+          updatePayload.nama_promo = itemNamaPromo;
+          updatePayload.jenis_diskon = itemJenisDiskon;
+          updatePayload.nilai_diskon = itemNilaiDiskon;
+          updatePayload.diskon = itemDiskon;
+          updatePayload.subtotal_setelah_diskon = itemSubtotalSetelahDiskon;
+        }
+        await trx("trx_detail_transaksi").where("id", existRow.id).update(updatePayload);
+      } else {
+        const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
+        nextDetailSeq++;
+
+        const insertPayload = {
+          kode_cabang: resolvedCabang,
+          kode_detail_transaksi: cKodeDetail,
+          kode_transaksi: createdTransaksiKode,
+          kode_layanan: item.kode_layanan,
+          kode_produk: null,
+          qty: 1,
+          harga_satuan: hargaSatuanGross,
+          subtotal: itemSubtotal,
+          is_from_pendaftaran: 1,
+          tz: tz || "Asia/Jakarta",
+          created_by: username,
+          created_at: formatDateSystem(),
+          updated_by: username,
+          updated_at: formatDateSystem(),
+        };
+        if (hasDiscountCols) {
+          insertPayload.kode_promo = itemKodePromo;
+          insertPayload.nama_promo = itemNamaPromo;
+          insertPayload.jenis_diskon = itemJenisDiskon;
+          insertPayload.nilai_diskon = itemNilaiDiskon;
+          insertPayload.diskon = itemDiskon;
+          insertPayload.subtotal_setelah_diskon = itemSubtotalSetelahDiskon;
+        }
+
+        await trx("trx_detail_transaksi").insert(insertPayload);
       }
     }
   }
@@ -331,6 +446,37 @@ export const syncCompletedItemsToKasirDraft = async (trx, {
         .select("kode_produk", "nama", "harga_jual");
       mstProdukList.forEach((p) => {
         produkPriceMap[p.kode_produk] = parseFloat(p.harga_jual || 0);
+      });
+    }
+
+    // Pre-fetch promo aktif untuk produk
+    let productPromoMap = {};
+    if (kodeProdukList.length > 0) {
+      const activeProductPromos = await trx("mst_promo as p")
+        .join("mst_detail_promo as dp", "p.kode_promo", "dp.kode_promo")
+        .where("p.status", "aktif")
+        .where("dp.status", "aktif")
+        .whereIn("dp.kode_item", kodeProdukList)
+        .whereRaw("DATE(p.tanggal_mulai) <= ?", [todayYmd])
+        .whereRaw("DATE(p.tanggal_selesai) >= ?", [todayYmd])
+        .select(
+          "p.kode_promo",
+          "p.nama as nama_promo",
+          "p.jenis_diskon",
+          "p.nilai_diskon",
+          "dp.kode_item"
+        );
+
+      activeProductPromos.forEach((pr) => {
+        if (!productPromoMap[pr.kode_item]) {
+          productPromoMap[pr.kode_item] = pr;
+        } else {
+          const curVal = parseFloat(productPromoMap[pr.kode_item].nilai_diskon || 0);
+          const newVal = parseFloat(pr.nilai_diskon || 0);
+          if (newVal > curVal) {
+            productPromoMap[pr.kode_item] = pr;
+          }
+        }
       });
     }
 
@@ -371,22 +517,57 @@ export const syncCompletedItemsToKasirDraft = async (trx, {
           : parseFloat(prd.harga || prd.harga_satuan || prd.harga_jual || 0);
         const subtotal = qty * rawHarga;
 
+        // Ambil info promo untuk produk ini jika ada
+        const promo = (prd.kode_promo && prd.nilai_diskon != null)
+          ? {
+              kode_promo: prd.kode_promo,
+              nama_promo: prd.nama_promo || null,
+              jenis_diskon: prd.jenis_diskon || "persen",
+              nilai_diskon: parseFloat(prd.nilai_diskon),
+            }
+          : productPromoMap[kdProduk];
+
+        let itemDiskon = 0;
+        if (promo && promo.nilai_diskon) {
+          const nDisc = parseFloat(promo.nilai_diskon || 0);
+          if (promo.jenis_diskon === "persen") {
+            itemDiskon = (subtotal * nDisc) / 100;
+          } else if (promo.jenis_diskon === "nominal") {
+            itemDiskon = Math.min(nDisc * qty, subtotal);
+          }
+        }
+        const subtotalSetelahDiskon = Math.max(0, subtotal - itemDiskon);
+
+        const isOverride = Boolean(prd.is_expired_override || prd.produk_expired_override) ? 1 : 0;
+        const catatanOverride = prd.catatan_override || (isOverride ? "Disetujui dokter/petugas" : null);
+
         const existPrd = freshDetails.find((d) => d.kode_produk === kdProduk);
         if (existPrd) {
+          const updatePayload = {
+            qty: qty,
+            harga_satuan: rawHarga,
+            subtotal: subtotal,
+            is_expired_override: isOverride,
+            catatan_override: catatanOverride,
+            updated_by: username,
+            updated_at: formatDateSystem(),
+          };
+          if (hasDiscountCols) {
+            updatePayload.kode_promo = promo?.kode_promo || null;
+            updatePayload.nama_promo = promo?.nama_promo || null;
+            updatePayload.jenis_diskon = promo?.jenis_diskon || null;
+            updatePayload.nilai_diskon = promo?.nilai_diskon != null ? parseFloat(promo.nilai_diskon) : null;
+            updatePayload.diskon = itemDiskon;
+            updatePayload.subtotal_setelah_diskon = subtotalSetelahDiskon;
+          }
           await trx("trx_detail_transaksi")
             .where("id", existPrd.id)
-            .update({
-              qty: qty,
-              harga_satuan: rawHarga,
-              subtotal: subtotal,
-              updated_by: username,
-              updated_at: formatDateSystem(),
-            });
+            .update(updatePayload);
         } else {
           const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
           nextDetailSeq++;
 
-          await trx("trx_detail_transaksi").insert({
+          const insertPayload = {
             kode_cabang: resolvedCabang,
             kode_detail_transaksi: cKodeDetail,
             kode_transaksi: createdTransaksiKode,
@@ -396,37 +577,49 @@ export const syncCompletedItemsToKasirDraft = async (trx, {
             harga_satuan: rawHarga,
             subtotal: subtotal,
             is_from_pendaftaran: 0,
+            is_expired_override: isOverride,
+            catatan_override: catatanOverride,
             tz: tz || "Asia/Jakarta",
             created_by: username,
             created_at: formatDateSystem(),
             updated_by: username,
             updated_at: formatDateSystem(),
-          });
+          };
+          if (hasDiscountCols) {
+            insertPayload.kode_promo = promo?.kode_promo || null;
+            insertPayload.nama_promo = promo?.nama_promo || null;
+            insertPayload.jenis_diskon = promo?.jenis_diskon || null;
+            insertPayload.nilai_diskon = promo?.nilai_diskon != null ? parseFloat(promo.nilai_diskon) : null;
+            insertPayload.diskon = itemDiskon;
+            insertPayload.subtotal_setelah_diskon = subtotalSetelahDiskon;
+          }
+          await trx("trx_detail_transaksi").insert(insertPayload);
         }
       }
     }
   }
 
   // 6. Rekalibrasi total_harga, promo diskon, DP booking, total_bayar, & sisa_bayar
-  const sumResult = await trx("trx_detail_transaksi")
-    .where("kode_transaksi", createdTransaksiKode)
-    .sum("subtotal as total");
+  const allCurrentDetails = await trx("trx_detail_transaksi")
+    .where("kode_transaksi", createdTransaksiKode);
 
-  const grandTotalHarga = parseFloat(sumResult[0]?.total || 0);
+  const grandTotalHarga = allCurrentDetails.reduce((sum, d) => sum + parseFloat(d.subtotal || 0), 0);
 
   // Ambil state transaksi terkini untuk promo dan DP
   const currentTrx = await trx("trx_transaksi")
     .where("kode_transaksi", createdTransaksiKode)
     .first();
 
-  // Hanya hitung diskon kasir untuk item tambahan kasir (is_from_pendaftaran = 0)
-  const extraDetails = await trx("trx_detail_transaksi")
-    .where("kode_transaksi", createdTransaksiKode)
-    .where("is_from_pendaftaran", 0);
-
+  // Hitung total diskon dari produk/item tambahan kasir + diskon include konsultasi
+  const extraDetails = allCurrentDetails.filter((d) => d.is_from_pendaftaran === 0);
   let totalDiskon = 0;
-  extraDetails.forEach((d) => {
-    totalDiskon += parseFloat(d.diskon || 0);
+  allCurrentDetails.forEach((d) => {
+    if (d.jenis_diskon === "include_treatment") {
+      // Diskon include konsultasi sudah mengurangi subtotal item menjadi 0
+      // jadi tidak perlu memotong grandTotalHarga lagi
+    } else {
+      totalDiskon += parseFloat(d.diskon || 0);
+    }
   });
 
   if (totalDiskon === 0 && currentTrx?.kode_promo && extraDetails.length > 0) {
@@ -489,18 +682,39 @@ export const syncCompletedItemsToKasirDraft = async (trx, {
 
   const sisaBayar = Math.max(0, grandTotalBayar - dpNominal);
 
+  // Kumpulkan semua kode promo & nama promo dari detail item untuk sinkronisasi ke header transaksi
+  const allDetailsWithPromo = await trx("trx_detail_transaksi")
+    .where("kode_transaksi", createdTransaksiKode)
+    .whereNotNull("kode_promo");
+
+  const promoCodes = [];
+  const promoNames = [];
+  allDetailsWithPromo.forEach((d) => {
+    if (d.kode_promo && !promoCodes.includes(d.kode_promo)) promoCodes.push(d.kode_promo);
+    if (d.nama_promo && !promoNames.includes(d.nama_promo)) promoNames.push(d.nama_promo);
+  });
+
+  const hasNamaPromoTrx = await trx.schema.hasColumn("trx_transaksi", "nama_promo");
+  const updateTrxPayload = {
+    total_harga: grandTotalHarga,
+    total_diskon: totalDiskon,
+    total_bayar: grandTotalBayar,
+    dp_nominal: dpNominal,
+    metode_pembayaran_dp: metodeDp,
+    sisa_bayar: sisaBayar,
+    updated_by: username,
+    updated_at: formatDateSystem(),
+  };
+  if (promoCodes.length > 0) {
+    updateTrxPayload.kode_promo = promoCodes.join(",");
+  }
+  if (hasNamaPromoTrx && promoNames.length > 0) {
+    updateTrxPayload.nama_promo = promoNames.join(", ");
+  }
+
   await trx("trx_transaksi")
     .where("kode_transaksi", createdTransaksiKode)
-    .update({
-      total_harga: grandTotalHarga,
-      total_diskon: totalDiskon,
-      total_bayar: grandTotalBayar,
-      dp_nominal: dpNominal,
-      metode_pembayaran_dp: metodeDp,
-      sisa_bayar: sisaBayar,
-      updated_by: username,
-      updated_at: formatDateSystem(),
-    });
+    .update(updateTrxPayload);
 
   return {
     kode_transaksi: createdTransaksiKode,

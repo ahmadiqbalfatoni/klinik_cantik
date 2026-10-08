@@ -20,6 +20,7 @@ const STATUS_DOT: Record<string, { color: string; label: string }> = {
 import Form from './form';
 import { useRef } from 'react';
 import { formatDateSystem } from '@/lib/tools/dateTools';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 const Table = ({ state, setState, formik, toast, getData, getGridData, onLazyLoad }: TableProps) => {
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -112,18 +113,13 @@ const Table = ({ state, setState, formik, toast, getData, getGridData, onLazyLoa
                 </div>
             </div>
             {/* Legenda warna status */}
-            <div className="flex flex-wrap align-items-center gap-3 px-1 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                <span className="flex align-items-center gap-1">
-                    <i className="pi pi-info-circle" />
-                    <span className="font-semibold">KETERANGAN STATUS:</span>
-                </span>
-                {Object.entries(STATUS_DOT).map(([key, val]) => (
-                    <span key={key} className="flex align-items-center gap-1">
-                        <span style={{ display:'inline-block', width:'12px', height:'12px', borderRadius:'3px', backgroundColor: val.color, boxShadow:`0 1px 3px ${val.color}55` }} />
-                        {val.label}
-                    </span>
-                ))}
-            </div>
+            <KeteranganStatus
+                className="mb-2"
+                items={Object.entries(STATUS_DOT).map(([_, val]) => ({
+                    label: val.label,
+                    color: val.color,
+                }))}
+            />
         </div>
     );
 

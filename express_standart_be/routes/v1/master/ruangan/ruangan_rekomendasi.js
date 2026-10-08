@@ -10,13 +10,14 @@
 
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem, getJakartaMinutesNow, getJakartaYmdNow } from "../../components/tools/date_tools.js";
+import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
 import { syncRekamMedisPerAntrian } from "./rekam_medis_service.js";
 import { terbitkanAntreanLanjutanRuangan } from "./antrian_lanjutan_service.js";
 import { syncCompletedItemsToKasirDraft } from "../kasir/kasir_sync_service.js";
+import { getProdukBatchStockInfo } from "../inventori/batch_helper.js";
 
 const router = express.Router();
 
@@ -58,6 +59,7 @@ const handleGetRekomendasiOptions = async (req, res) => {
         "l.harga",
         "l.durasi_menit",
         "l.wajib_konsultasi",
+        "l.is_include_konsultasi",
         "l.tipe",
         "l.foto",
         "l.kode_ruangan",
@@ -86,6 +88,7 @@ const handleGetRekomendasiOptions = async (req, res) => {
         "p.kode_paket_layanan",
         "p.nama",
         "p.harga_paket as harga",
+        "p.is_include_konsultasi",
         "p.masa_berlaku_hari",
         "p.tipe",
         "p.foto",
@@ -114,7 +117,9 @@ const handleGetRekomendasiOptions = async (req, res) => {
         "pr.satuan",
         "pr.foto",
         "pr.harga_jual as harga",
-        "pr.stok_minimum"
+        "pr.stok_minimum",
+        "pr.stok_tersedia",
+        "pr.tanggal_kadaluarsa"
       )
       .orderBy("pr.nama", "asc");
 
@@ -414,7 +419,7 @@ const handleGetRekomendasiOptions = async (req, res) => {
       if (nearestBkg && nearestBkg.jam_booking) {
         const [bH, bM] = String(nearestBkg.jam_booking).slice(0, 5).split(":").map(Number);
         const bookingMinutes = (isNaN(bH) ? 0 : bH) * 60 + (isNaN(bM) ? 0 : bM);
-        const nowMin = getJakartaMinutesNow();
+        const nowMin = nowTime.getHours() * 60 + nowTime.getMinutes();
         const menitMenujuBooking = bookingMinutes - nowMin;
         slackMenit = menitMenujuBooking - sisaBebanMenit - bufferMenit;
 
@@ -657,6 +662,7 @@ const handleGetRekomendasiOptions = async (req, res) => {
         jenis: "layanan",
         tipe: item.tipe || "BEAUTY TREATMENT",
         wajib_konsultasi: item.wajib_konsultasi || "opsional",
+        is_include_konsultasi: Boolean(item.is_include_konsultasi === 1 || item.is_include_konsultasi === "1" || item.is_include_konsultasi === true),
         foto: fotoUrl,
         kode: item.kode_layanan,
         kode_layanan: item.kode_layanan,
@@ -702,6 +708,7 @@ const handleGetRekomendasiOptions = async (req, res) => {
         jenis: "paket_layanan",
         tipe: item.tipe || "BEAUTY TREATMENT",
         wajib_konsultasi: item.tipe === "MEDICAL TREATMENT" ? "wajib" : item.tipe === "SERVICE TREATMENT" ? "tidak" : "opsional",
+        is_include_konsultasi: Boolean(item.is_include_konsultasi === 1 || item.is_include_konsultasi === "1" || item.is_include_konsultasi === true),
         foto: fotoUrl,
         kode: item.kode_paket_layanan,
         kode_layanan: item.kode_paket_layanan,
@@ -737,9 +744,39 @@ const handleGetRekomendasiOptions = async (req, res) => {
       });
     });
 
+    const paketCodes = vaPaketProduk.map((p) => p.kode_paket_produk);
+    let paketDetails = [];
+    if (paketCodes.length > 0) {
+      paketDetails = await DB("mst_detail_paket_produk as dp")
+        .whereIn("dp.kode_paket_produk", paketCodes)
+        .select("dp.kode_paket_produk", "dp.kode_produk", "dp.jumlah");
+    }
+
+    const allProdCodes = new Set(vaProduk.map((p) => p.kode_produk));
+    paketDetails.forEach((d) => allProdCodes.add(d.kode_produk));
+
+    const batchStockMap = await getProdukBatchStockInfo(Array.from(allProdCodes), branchCode);
+
     const listProduk = vaProduk.map((item) => {
       const fotoUrl = item.foto
         ? (item.foto.startsWith("http") ? item.foto : `${assetsBase}/uploads/produk/${item.foto}`)
+        : null;
+
+      const batchInfo = batchStockMap[item.kode_produk] || {
+        stok_layak_jual: item.stok_tersedia || 0,
+        stok_total_fisik: item.stok_tersedia || 0,
+        is_expired: false,
+        tanggal_kadaluarsa: item.tanggal_kadaluarsa || null,
+        tanggal_kadaluarsa_terdekat: item.tanggal_kadaluarsa || null,
+        total_batch_kadaluarsa: 0,
+      };
+
+      const stokLayakJual = batchInfo.stok_layak_jual;
+      const isExpired = Boolean(batchInfo.is_expired);
+      const expDate = batchInfo.tanggal_kadaluarsa || (item.tanggal_kadaluarsa ? String(item.tanggal_kadaluarsa).slice(0, 10) : null);
+      const expDateTerdekat = batchInfo.tanggal_kadaluarsa_terdekat || expDate;
+      const alasanExpired = isExpired
+        ? `Batch kadaluarsa sejak ${expDateTerdekat || 'beberapa hari lalu'}`
         : null;
 
       return applyPromo({
@@ -753,6 +790,13 @@ const handleGetRekomendasiOptions = async (req, res) => {
         harga: parseFloat(item.harga || 0),
         kode_kategori: item.kode_kategori_produk,
         nama_kategori: item.nama_kategori || "Produk",
+        stok_tersedia: stokLayakJual,
+        stok_layak_jual: stokLayakJual,
+        stok_total_fisik: batchInfo.stok_total_fisik,
+        is_expired: isExpired,
+        tanggal_kadaluarsa: expDate,
+        tanggal_kadaluarsa_terdekat: expDateTerdekat,
+        alasan_expired: alasanExpired,
         is_petugas_available: true,
       });
     });
@@ -761,6 +805,45 @@ const handleGetRekomendasiOptions = async (req, res) => {
       const fotoUrl = item.foto
         ? (item.foto.startsWith("http") ? item.foto : `${assetsBase}/uploads/paket_produk/${item.foto}`)
         : null;
+
+      const details = paketDetails.filter((d) => d.kode_paket_produk === item.kode_paket_produk);
+      let stokLayakJual = 999999;
+      let stokTotalFisik = 999999;
+      let isExpired = false;
+      let expDate = null;
+      let expDateTerdekat = null;
+      let alasanExpired = null;
+
+      if (details.length === 0) {
+        stokLayakJual = 0;
+        stokTotalFisik = 0;
+      } else {
+        for (const d of details) {
+          const bInfo = batchStockMap[d.kode_produk] || {
+            stok_layak_jual: 0,
+            stok_total_fisik: 0,
+            is_expired: false,
+            tanggal_kadaluarsa: null,
+            tanggal_kadaluarsa_terdekat: null,
+          };
+          const reqQty = Math.max(1, parseInt(d.jumlah || 1, 10));
+          const availableUnits = Math.floor((bInfo.stok_layak_jual || 0) / reqQty);
+          const physicalUnits = Math.floor((bInfo.stok_total_fisik || 0) / reqQty);
+
+          if (availableUnits < stokLayakJual) stokLayakJual = availableUnits;
+          if (physicalUnits < stokTotalFisik) stokTotalFisik = physicalUnits;
+
+          if (bInfo.is_expired) {
+            isExpired = true;
+            expDate = bInfo.tanggal_kadaluarsa;
+            expDateTerdekat = bInfo.tanggal_kadaluarsa_terdekat || expDate;
+            alasanExpired = `Item dalam paket kadaluarsa (${expDateTerdekat || 'expired'})`;
+          }
+        }
+      }
+
+      if (stokLayakJual === 999999) stokLayakJual = 0;
+      if (stokTotalFisik === 999999) stokTotalFisik = 0;
 
       return applyPromo({
         jenis: "paket_produk",
@@ -773,6 +856,13 @@ const handleGetRekomendasiOptions = async (req, res) => {
         harga: parseFloat(item.harga || 0),
         kode_kategori: "PAKET_PRODUK",
         nama_kategori: "Paket Produk",
+        stok_tersedia: stokLayakJual,
+        stok_layak_jual: stokLayakJual,
+        stok_total_fisik: stokTotalFisik,
+        is_expired: isExpired,
+        tanggal_kadaluarsa: expDate,
+        tanggal_kadaluarsa_terdekat: expDateTerdekat,
+        alasan_expired: alasanExpired,
         masa_berlaku_hari: item.masa_berlaku_hari,
         is_petugas_available: true,
       });
@@ -833,6 +923,39 @@ const handleGetRekomendasiOptions = async (req, res) => {
       };
     });
 
+    // Fetch active consultation fee / room
+    const qRuangKonsul = DB("mst_ruangan")
+      .where("status", "aktif")
+      .where(function () {
+        this.where("is_konsultasi", 1).orWhereRaw("LOWER(nama_ruangan) LIKE '%konsultasi%'");
+      });
+    if (branchCode) qRuangKonsul.where("kode_cabang", branchCode);
+    const ruangKonsul = await qRuangKonsul.first();
+
+    const qLayananKonsul = DB("mst_layanan")
+      .where("status", "aktif")
+      .where(function () {
+        this.where("kode_ruangan", ruangKonsul?.kode_ruangan || "RNG-007")
+            .orWhereRaw("LOWER(nama) LIKE '%konsultasi%'");
+      });
+    if (branchCode) qLayananKonsul.where("kode_cabang", branchCode);
+    const layananKonsul = await qLayananKonsul.first();
+
+    let rawConsultPrice = parseFloat(layananKonsul?.harga || ruangKonsul?.harga_konsultasi || 15000);
+    let effectiveConsultPrice = rawConsultPrice;
+    if (layananKonsul) {
+      const pKey = `layanan_${layananKonsul.kode_layanan}`;
+      const promoK = promoMap[pKey];
+      if (promoK) {
+        const dVal = parseFloat(promoK.nilai_diskon || 0);
+        if (promoK.jenis_diskon === "persen") {
+          effectiveConsultPrice = Math.max(0, rawConsultPrice - (rawConsultPrice * dVal) / 100);
+        } else {
+          effectiveConsultPrice = Math.max(0, rawConsultPrice - dVal);
+        }
+      }
+    }
+
     return res.status(200).json({
       status: status.SUKSES,
       message: "Data opsi rekomendasi berhasil dimuat",
@@ -843,6 +966,12 @@ const handleGetRekomendasiOptions = async (req, res) => {
         paket_layanan: listPaketLayanan,
         produk: listProduk,
         paket_produk: listPaketProduk,
+        harga_konsultasi: effectiveConsultPrice,
+        ruang_konsultasi: {
+          kode_ruangan: ruangKonsul?.kode_ruangan || "RNG-007",
+          nama_ruangan: ruangKonsul?.nama_ruangan || "Ruang Konsultasi",
+          harga_konsultasi: effectiveConsultPrice,
+        },
       },
     });
   } catch (error) {
@@ -877,6 +1006,33 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
     rekomendasi_items = [],
   } = oPayload;
   const username = req?.auth?.username || "system";
+  const userRole = (req?.auth?.role || "").toLowerCase();
+  const AUTHORIZED_OVERRIDE_ROLES = [
+    "owner",
+    "manager",
+    "superadmin",
+    "admin",
+    "dokter",
+    "kasir",
+    "supervisor",
+    "apoteker",
+    "dev",
+  ];
+
+  const items = Array.isArray(rekomendasi_items) ? rekomendasi_items : [];
+
+  // Validasi otorisasi jika ada item rekomendasi yang meminta override kadaluarsa
+  const hasOverrideRequest = items.some((p) => p.produk_expired_override || p.is_expired_override);
+  if (hasOverrideRequest) {
+    const isAuthorized = userRole && AUTHORIZED_OVERRIDE_ROLES.includes(userRole);
+    if (!isAuthorized) {
+      return res.status(403).json({
+        status: status.GAGAL || "01",
+        message: "Akses ditolak: Anda tidak memiliki otorisasi (role) untuk melakukan override produk kadaluarsa.",
+        datetime: formatDateSystem(),
+      });
+    }
+  }
 
   try {
     if (!kode_antrian_layanan) {
@@ -904,6 +1060,8 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
     if (kodeKunjungan) {
       kunjungan = await DB("trx_kunjungan").where("kode_kunjungan", kodeKunjungan).first();
     }
+
+    const branchCode = oPayload.kode_cabang || currentAntrian?.kode_cabang || kunjungan?.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
 
     const createdAntrianLayanan = [];
     let createdTransaksi = null;
@@ -950,6 +1108,23 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
           action: "UPDATE",
           dataBefore: { kode_karyawan: oPayload.no_sip_asal_booking, nama: oPayload.petugas_asal_booking },
           dataAfter: { kode_karyawan: oPayload.kode_karyawan, nama: oPayload.petugas_pengganti, catatan: oPayload.catatan_perubahan_petugas },
+          user: username,
+          tz: oPayload.tz || "Asia/Jakarta"
+        }, trx);
+      }
+
+      // ─── AUDIT TRAIL: OVERRIDE PRODUK KADALUARSA JIKA ADA ───
+      const expiredOverrideList = (Array.isArray(rekomendasi_items) ? rekomendasi_items : []).filter(
+        (p) => p.produk_expired_override || p.is_expired_override
+      );
+      if (expiredOverrideList.length > 0) {
+        await ChangesLog({
+          description: `Override Produk Kadaluarsa Rekomendasi Konsultasi: ${expiredOverrideList.map((p) => `${p.nama || p.kode || p.kode_produk} (${p.catatan_override || 'Disetujui dokter'})`).join(", ")} pada antrean ${kode_antrian_layanan}`,
+          tableName: "trx_antrian_layanan",
+          referenceCode: kode_antrian_layanan,
+          action: "UPDATE",
+          dataBefore: null,
+          dataAfter: { expired_overrides: expiredOverrideList },
           user: username,
           tz: oPayload.tz || "Asia/Jakarta"
         }, trx);
@@ -1010,7 +1185,7 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
               const [eh, em] = (activeStaff.jam_selesai || "23:59").slice(0, 5).split(":").map(Number);
               const sMin = (isNaN(sh) ? 0 : sh) * 60 + (isNaN(sm) ? 0 : sm);
               const eMin = (isNaN(eh) ? 0 : eh) * 60 + (isNaN(em) ? 0 : em);
-              const nowMinutes = getJakartaMinutesNow();
+              const nowMinutes = todayDate.getHours() * 60 + todayDate.getMinutes();
 
               const roomInfo = await trx("mst_ruangan").where("kode_ruangan", rKode).first();
               const namaRuangan = roomInfo?.nama_ruangan || rNama || rKode;
@@ -1081,7 +1256,7 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
 
                 const [bH, bM] = String(nearestBkg.jam_booking).slice(0, 5).split(":").map(Number);
                 const bookingMinutes = (isNaN(bH) ? 0 : bH) * 60 + (isNaN(bM) ? 0 : bM);
-                const nowMin = getJakartaMinutesNow();
+                const nowMin = todayDate.getHours() * 60 + todayDate.getMinutes();
                 const menitMenujuBooking = bookingMinutes - nowMin;
                 const slackMenit = menitMenujuBooking - totalSisaBeban - bufferBookingMenit;
 
@@ -1111,6 +1286,32 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
           .del();
 
         if (produkItems.length > 0) {
+          // Validasi stok layak jual produk sebelum insert
+          const productCodesToCheck = produkItems
+            .filter((p) => (p.jenis || "").toLowerCase() === "produk")
+            .map((p) => p.kode || p.kode_produk || p.kode_layanan)
+            .filter(Boolean);
+
+          if (productCodesToCheck.length > 0) {
+            const batchStockMap = await getProdukBatchStockInfo(productCodesToCheck, branchCode);
+            for (const prd of produkItems) {
+              if ((prd.jenis || "").toLowerCase() === "produk") {
+                const kdPrd = prd.kode || prd.kode_produk || prd.kode_layanan;
+                const nmPrd = prd.nama || prd.nama_produk || prd.nama_layanan || "Produk";
+                const qty = Math.max(1, parseInt(prd.qty || 1, 10));
+                const bInfo = batchStockMap[kdPrd];
+                if (bInfo && bInfo.stok_layak_jual < qty) {
+                  await trx.rollback();
+                  return res.status(422).json({
+                    status: status.BAD_REQUEST,
+                    message: `Jumlah produk "${nmPrd}" (${qty}) melebihi stok yang layak jual (${bInfo.stok_layak_jual} tersisa).`,
+                    datetime: formatDateSystem(),
+                  });
+                }
+              }
+            }
+          }
+
           const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
           const alParts = kode_antrian_layanan.split("-");
           const seqPadded = alParts.length >= 3 ? alParts[2] : "001";
@@ -1343,21 +1544,73 @@ router.post("/antrian-layanan-pendaftaran-items", async (req, res) => {
       "dal.*",
       "l.harga as lay_master_harga",
       "l.kode_ruangan as lay_ruangan",
+      "l.is_include_konsultasi as lay_is_include_konsultasi",
       "kl.nama as lay_nama_kategori",
       "r_lay.nama_ruangan as lay_nama_ruangan",
       "r_lay.is_konsultasi as lay_is_konsul",
       "p.harga_paket as pkt_master_harga",
       "p.kode_ruangan as pkt_ruangan",
+      "p.is_include_konsultasi as pkt_is_include_konsultasi",
       "r_pkt.nama_ruangan as pkt_nama_ruangan",
       "r_pkt.is_konsultasi as pkt_is_konsul"
     );
+
+    // Fetch active promos today with detail promo
+    const todayYmd = new Date().toISOString().slice(0, 10);
+    const qPromo = DB("mst_promo as p")
+      .join("mst_detail_promo as dp", "p.kode_promo", "dp.kode_promo")
+      .where("p.status", "aktif")
+      .where("dp.status", "aktif")
+      .whereRaw("DATE(p.tanggal_mulai) <= ?", [todayYmd])
+      .whereRaw("DATE(p.tanggal_selesai) >= ?", [todayYmd]);
+
+    const activePromos = await qPromo.select(
+      "p.kode_promo",
+      "p.nama as nama_promo",
+      "p.jenis_diskon",
+      "p.nilai_diskon",
+      "dp.jenis_item",
+      "dp.kode_item"
+    );
+
+    const promoMap = {};
+    activePromos.forEach((pr) => {
+      const jenisClean = (pr.jenis_item || "").toLowerCase();
+      const normJenis = jenisClean.includes("layanan")
+        ? jenisClean.includes("paket") ? "paket" : "layanan"
+        : jenisClean.includes("produk") ? jenisClean.includes("paket") ? "paket" : "produk" : jenisClean;
+
+      const keys = [`${normJenis}_${pr.kode_item}`, `${jenisClean}_${pr.kode_item}`];
+      keys.forEach((key) => {
+        if (!promoMap[key]) {
+          promoMap[key] = pr;
+        } else {
+          const curVal = parseFloat(promoMap[key].nilai_diskon || 0);
+          const newVal = parseFloat(pr.nilai_diskon || 0);
+          if (newVal > curVal) {
+            promoMap[key] = pr;
+          }
+        }
+      });
+    });
+
+    // Cek apakah SEMUA tindakan dalam kunjungan ini adalah include konsultasi
+    const treatmentItems = rawItems.filter((item) => !Boolean(item.lay_is_konsul) && !Boolean(item.pkt_is_konsul));
+    const isAllInclude = treatmentItems.length > 0 && treatmentItems.every((item) => {
+      return (
+        item.lay_is_include_konsultasi === 1 ||
+        item.lay_is_include_konsultasi === "1" ||
+        item.lay_is_include_konsultasi === true ||
+        item.pkt_is_include_konsultasi === 1 ||
+        item.pkt_is_include_konsultasi === "1" ||
+        item.pkt_is_include_konsultasi === true
+      );
+    });
 
     // Filter is_konsultasi HANYA dipakai jika untuk keperluan rujukan ruangan (for_referral === true)
     // agar dokter hanya merujuk layanan tindakan lebih lanjut ke ruang tindakan.
     // Jika tidak sedang merujuk (for_referral falsy / untuk ringkasan layanan kunjungan),
     // seluruh layanan (termasuk konsultasi) disertakan secara utuh.
-    // CATATAN: Endpoint ini adalah untuk UI form penanganan/rujukan dan TIDAK PERNAH digunakan
-    // untuk menghitung atau membatasi tagihan kasir (kasir langsung membaca trx_detail_antrian_layanan).
     const isForReferral = Boolean(for_referral === true || for_referral === "true" || for_referral === 1);
     const filteredItems = isForReferral
       ? rawItems.filter((i) => !Boolean(i.lay_is_konsul) && !Boolean(i.pkt_is_konsul))
@@ -1370,6 +1623,9 @@ router.post("/antrian-layanan-pendaftaran-items", async (req, res) => {
         const roomCode = isPaket ? (i.pkt_ruangan || i.kode_ruangan) : (i.lay_ruangan || i.kode_ruangan);
         const roomName = isPaket ? (i.pkt_nama_ruangan || i.nama_ruangan) : (i.lay_nama_ruangan || i.nama_ruangan);
         const isKlaim = jenisStr.includes("klaim");
+        const isKonsul = Boolean(i.lay_is_konsul) || Boolean(i.pkt_is_konsul) ||
+          (i.nama_layanan || "").toLowerCase().includes("konsul") ||
+          (i.kode_layanan || "").toLowerCase().includes("konsul");
 
         // Base price selalu harga master normal
         let baseMasterPrice = isPaket
@@ -1380,21 +1636,79 @@ router.post("/antrian-layanan-pendaftaran-items", async (req, res) => {
           baseMasterPrice = 0;
         }
 
-        // Harga final yang berlaku (setelah promo diskon pendaftaran/booking, sama persis seperti di Kasir)
-        let finalPrice = isKlaim
-          ? 0
-          : (i.harga !== null && i.harga !== undefined ? parseFloat(i.harga) : baseMasterPrice);
+        const activePromo = promoMap[`layanan_${i.kode_layanan}`] ||
+          promoMap[`paket_${i.kode_layanan}`] ||
+          promoMap[`paket_layanan_${i.kode_layanan}`];
 
-        // Jika terdapat promo dan nilai_diskon, pastikan finalPrice adalah harga setelah dipotong diskon
-        if (!isKlaim && (i.kode_promo || i.nama_promo) && i.nilai_diskon) {
-          const nDiskon = parseFloat(i.nilai_diskon || 0);
-          if (i.jenis_diskon === "persen") {
-            const diskonNominal = (baseMasterPrice * nDiskon) / 100;
-            finalPrice = Math.max(0, baseMasterPrice - diskonNominal);
-          } else if (i.jenis_diskon === "nominal") {
-            finalPrice = Math.max(0, baseMasterPrice - nDiskon);
-          }
+        let isPromo = false;
+        let promoKode = i.kode_promo || null;
+        let promoNama = i.nama_promo || null;
+        let promoJenis = i.jenis_diskon || null;
+        let promoNilai = i.nilai_diskon ? parseFloat(i.nilai_diskon) : null;
+
+        if (activePromo) {
+          isPromo = true;
+          promoKode = activePromo.kode_promo;
+          promoNama = activePromo.nama_promo;
+          promoJenis = activePromo.jenis_diskon;
+          promoNilai = parseFloat(activePromo.nilai_diskon || 0);
+        } else if (i.kode_promo || i.nama_promo || i.nilai_diskon) {
+          isPromo = true;
+          promoKode = i.kode_promo || null;
+          promoNama = i.nama_promo || null;
+          promoJenis = i.jenis_diskon || null;
+          promoNilai = i.nilai_diskon ? parseFloat(i.nilai_diskon) : null;
         }
+
+        let effectivePromoPrice = baseMasterPrice;
+        if (isPromo && promoNilai) {
+          if (promoJenis === "persen") {
+            const diskonNominal = (baseMasterPrice * promoNilai) / 100;
+            effectivePromoPrice = Math.max(0, baseMasterPrice - diskonNominal);
+          } else if (promoJenis === "nominal") {
+            effectivePromoPrice = Math.max(0, baseMasterPrice - promoNilai);
+          }
+        } else if (parseFloat(i.harga || 0) > 0 && parseFloat(i.harga || 0) < baseMasterPrice) {
+          effectivePromoPrice = parseFloat(i.harga);
+        }
+
+        const isItemIncludeKonsul = Boolean(
+          i.lay_is_include_konsultasi === 1 ||
+          i.lay_is_include_konsultasi === "1" ||
+          i.lay_is_include_konsultasi === true ||
+          i.pkt_is_include_konsultasi === 1 ||
+          i.pkt_is_include_konsultasi === "1" ||
+          i.pkt_is_include_konsultasi === true
+        );
+
+        // Jika ini item konsultasi DAN seluruh tindakan dalam kunjungan ini adalah include:
+        // Item konsultasi digratiskan (Diskon 100% / Include Tindakan)
+        if (isKonsul && isAllInclude) {
+          const namaTindakan = treatmentItems[0]?.nama_layanan || "Tindakan";
+          return {
+            jenis: isPaket ? "paket_layanan" : (jenisStr || "layanan"),
+            tipe: isPaket ? "paket_layanan" : "layanan_biasa",
+            kode: i.kode_layanan,
+            nama: i.nama_layanan,
+            nama_kategori: i.lay_nama_kategori || (isPaket ? "Paket Layanan" : "Konsultasi"),
+            harga: 0,
+            harga_asal: effectivePromoPrice, // Harga promo aktif sebelum digratiskan (misal Rp 15.000)
+            is_promo: isPromo,
+            is_free_include: true,
+            is_include_konsultasi: false,
+            kode_promo: promoKode,
+            nama_promo: `Gratis (Include ${namaTindakan})`,
+            jenis_diskon: "include_treatment",
+            nilai_diskon: effectivePromoPrice,
+            kode_ruangan: roomCode || "RNG-001",
+            nama_ruangan: roomName || "Ruang Konsultasi",
+            is_locked: true,
+            is_pendaftaran: true,
+          };
+        }
+
+        // Harga final yang berlaku (setelah promo diskon pendaftaran/booking, sama persis seperti di Kasir)
+        let finalPrice = isKlaim ? 0 : effectivePromoPrice;
 
         return {
           jenis: isPaket ? "paket_layanan" : (jenisStr || "layanan"),
@@ -1404,11 +1718,13 @@ router.post("/antrian-layanan-pendaftaran-items", async (req, res) => {
           nama_kategori: i.lay_nama_kategori || (isPaket ? "Paket Layanan" : "Perawatan"),
           harga: finalPrice,
           harga_asal: baseMasterPrice,
-          is_promo: Boolean(i.kode_promo || i.nama_promo),
-          kode_promo: i.kode_promo || null,
-          nama_promo: i.nama_promo || null,
-          jenis_diskon: i.jenis_diskon || null,
-          nilai_diskon: i.nilai_diskon ? parseFloat(i.nilai_diskon) : null,
+          is_promo: isPromo,
+          is_free_include: false,
+          is_include_konsultasi: isItemIncludeKonsul,
+          kode_promo: promoKode,
+          nama_promo: promoNama,
+          jenis_diskon: promoJenis,
+          nilai_diskon: promoNilai,
           kode_ruangan: roomCode || "RNG-001",
           nama_ruangan: roomName || "Ruang Treatment",
           is_locked: true,

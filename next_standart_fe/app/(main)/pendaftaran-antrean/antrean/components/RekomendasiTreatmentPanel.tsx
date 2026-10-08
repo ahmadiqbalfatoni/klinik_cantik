@@ -7,6 +7,7 @@ import { Toast } from 'primereact/toast';
 import { Tag } from 'primereact/tag';
 import { Checkbox } from 'primereact/checkbox';
 import { OverlayPanel } from 'primereact/overlaypanel';
+import { Dialog } from 'primereact/dialog';
 import postData from '@/lib/axios/postData';
 import { showError, showWarning } from '@/lib/tools/generalTools';
 
@@ -17,6 +18,7 @@ export interface RekomendasiItem {
   nama: string;
   foto?: string | null;
   wajib_konsultasi?: 'tidak' | 'opsional' | 'wajib' | string;
+  is_include_konsultasi?: boolean | number | string;
   durasi_menit?: number;
   harga: number;
   harga_asal?: number;
@@ -53,6 +55,16 @@ export interface RekomendasiItem {
   badge_color?: 'green' | 'yellow' | 'red';
   slack_menit?: number | null;
   keterangan_status?: string | null;
+  stok_layak_jual?: number;
+  stok_tersedia?: number;
+  stok_total_fisik?: number;
+  is_expired?: boolean;
+  tanggal_kadaluarsa?: string | null;
+  tanggal_kadaluarsa_terdekat?: string | null;
+  alasan_expired?: string | null;
+  produk_expired_override?: boolean;
+  is_expired_override?: boolean;
+  catatan_override?: string | null;
   jam_booking_terdekat?: string | null;
   nama_pasien_booking_terdekat?: string | null;
   antrean_aktif_count?: number;
@@ -149,6 +161,12 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
     paket_layanan: RekomendasiItem[];
     produk: RekomendasiItem[];
     paket_produk: RekomendasiItem[];
+    harga_konsultasi?: number;
+    ruang_konsultasi?: {
+      kode_ruangan: string;
+      nama_ruangan: string;
+      harga_konsultasi: number;
+    };
   }>({
     ruangan: [],
     layanan: [],
@@ -163,21 +181,20 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
     fetchOptions();
   }, [kodeCabang]);
 
+  const userSelectedTabRef = useRef<boolean>(false);
   const lastNavigatedKeyRef = useRef<string>('');
 
   useEffect(() => {
     if (selectedItems && selectedItems.length > 0) {
-      const targetItem = selectedItems.find((s) => s.is_locked || s.is_pendaftaran);
-      if (targetItem) {
-        const itemKey = `${targetItem.jenis}_${targetItem.kode}`;
+      const targetTreatment = selectedItems.find(
+        (s) => (s.is_locked || s.is_pendaftaran) && !s.jenis.toLowerCase().includes('produk') && s.kode_ruangan
+      );
+      if (targetTreatment && targetTreatment.kode_ruangan) {
+        const itemKey = `${targetTreatment.jenis}_${targetTreatment.kode}`;
         if (lastNavigatedKeyRef.current !== itemKey) {
           lastNavigatedKeyRef.current = itemKey;
-          const j = (targetItem.jenis || '').toLowerCase();
-          if (j.includes('produk')) {
-            setActiveTabKey('TAB_PRODUK');
-          } else if (targetItem.kode_ruangan) {
-            setActiveTabKey(targetItem.kode_ruangan);
-          }
+          userSelectedTabRef.current = true;
+          setActiveTabKey(targetTreatment.kode_ruangan);
         }
       }
     } else {
@@ -214,6 +231,8 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
           paket_layanan: (res.data.data.paket_layanan || []).filter(isNotKonsul),
           produk: res.data.data.produk || [],
           paket_produk: res.data.data.paket_produk || [],
+          harga_konsultasi: res.data.data.harga_konsultasi,
+          ruang_konsultasi: res.data.data.ruang_konsultasi,
         });
       } else {
         showError(toast, res?.data?.message || 'Gagal memuat opsi rekomendasi');
@@ -430,8 +449,19 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
   }, [roomList, cleanSelectedItems]);
 
   useEffect(() => {
-    if (allTabs.length > 0 && (!activeTabKey || !allTabs.some((t) => t.key === activeTabKey))) {
-      setActiveTabKey(allTabs[0].key);
+    if (allTabs.length > 0) {
+      const firstRoomTab = allTabs.find((t) => !t.isProduct);
+      if (!userSelectedTabRef.current) {
+        if (firstRoomTab && activeTabKey !== firstRoomTab.key) {
+          setActiveTabKey(firstRoomTab.key);
+        } else if (!activeTabKey || !allTabs.some((t) => t.key === activeTabKey)) {
+          setActiveTabKey(allTabs[0].key);
+        }
+      } else {
+        if (!activeTabKey || !allTabs.some((t) => t.key === activeTabKey)) {
+          setActiveTabKey((firstRoomTab || allTabs[0]).key);
+        }
+      }
     }
   }, [allTabs, activeTabKey]);
 
@@ -468,6 +498,27 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
       }
       onChangeSelectedItems(selectedItems.filter((s) => !(s.jenis === item.jenis && s.kode === item.kode)));
       return;
+    }
+
+    // ─── VALIDASI EXPIRED PRODUK ───
+    if (['produk', 'paket_produk'].includes(item.jenis) && item.is_expired) {
+      showWarning(
+        toast,
+        `Produk "${item.nama}" sudah kadaluarsa (${item.tanggal_kadaluarsa_terdekat || item.tanggal_kadaluarsa || '-'}) dan tidak dapat dipilih.`
+      );
+      return;
+    }
+
+    // ─── VALIDASI STOK LAYAK JUAL PRODUK ───
+    if (item.jenis === 'produk') {
+      const maxStok = item.stok_layak_jual !== undefined ? item.stok_layak_jual : (item.stok_tersedia ?? 0);
+      if (maxStok <= 0) {
+        showWarning(
+          toast,
+          `Stok produk "${item.nama}" yang layak jual tidak tersedia (stok: 0).`
+        );
+        return;
+      }
     }
 
     if (isService) {
@@ -519,13 +570,37 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
 
   const handleQtyChange = (item: RekomendasiItem, newQty: number) => {
     if (disabled) return;
+
+    if (item.jenis === 'produk') {
+      const maxStok = item.stok_layak_jual !== undefined ? item.stok_layak_jual : (item.stok_tersedia ?? Infinity);
+      if (newQty > maxStok) {
+        showWarning(
+          toast,
+          `Jumlah pembelian untuk "${item.nama}" tidak boleh melebihi stok yang layak jual (${maxStok} ${item.satuan || 'pcs'}).`
+        );
+        return;
+      }
+    }
+
     const validQty = Math.max(1, newQty || 1);
     onChangeSelectedItems(
       selectedItems.map((s) => (s.jenis === item.jenis && s.kode === item.kode ? { ...s, qty: validQty } : s))
     );
   };
 
-  const totalHargaSelected = cleanSelectedItems.reduce((sum, i) => sum + (i.harga || 0) * (i.qty || 1), 0);
+  const consultFee = typeof options.harga_konsultasi === 'number' && options.harga_konsultasi > 0
+    ? options.harga_konsultasi
+    : 15000;
+
+  const selectedTreatments = cleanSelectedItems.filter((i) => ['layanan', 'paket_layanan'].includes(i.jenis));
+  const isAllIncludeKonsul = selectedTreatments.length > 0 && selectedTreatments.every((i) =>
+    Boolean(i.is_include_konsultasi === true || i.is_include_konsultasi === 1 || i.is_include_konsultasi === '1')
+  );
+  // Jika ada setidaknya 1 item yang Tidak Include (atau hanya memilih produk), konsultasi tetap dikenakan biaya tambahan
+  const isNonIncludeActive = cleanSelectedItems.length > 0 && !isAllIncludeKonsul;
+
+  const rawItemsTotal = cleanSelectedItems.reduce((sum, i) => sum + (i.harga || 0) * (i.qty || 1), 0);
+  const totalHargaSelected = isNonIncludeActive ? rawItemsTotal + consultFee : rawItemsTotal;
 
   return (
     <div
@@ -752,7 +827,10 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTabKey(tab.key)}
+                onClick={() => {
+                  userSelectedTabRef.current = true;
+                  setActiveTabKey(tab.key);
+                }}
                 className={`px-3 py-2 font-semibold text-xs border-none bg-transparent cursor-pointer flex align-items-center transition-colors relative white-space-nowrap ${
                   isActive ? 'text-primary font-bold' : 'text-600 hover:text-900'
                 }`}
@@ -942,7 +1020,10 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
               const isProduk = ['produk', 'paket_produk'].includes(item.jenis);
               const isCapacityLocked = isService && (item.status_kapasitas === 'berisiko' || currentRoomObj?.status_kapasitas === 'berisiko');
               const isUnavailable = isService && (item.is_petugas_available === false || Boolean(item.is_not_started_today) || Boolean(item.is_past_today) || isCapacityLocked);
-              const effectiveDisabled = isUnavailable || isRuangDisabled || disabled;
+              const isExpiredProduct = isProduk && Boolean(item.is_expired);
+              const maxStockProduct = item.stok_layak_jual !== undefined ? item.stok_layak_jual : (item.stok_tersedia ?? 0);
+              const isOutOfStockProduct = isProduk && !item.is_expired && maxStockProduct <= 0;
+              const effectiveDisabled = isUnavailable || isRuangDisabled || disabled || isExpiredProduct || isOutOfStockProduct;
 
               return (
                 <div key={`${item.jenis}_${item.kode}`} className="col-12 sm:col-6 md:col-4 lg:col-3 xl:col-3 p-2">
@@ -962,6 +1043,20 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                       boxShadow: isSelected ? '0 4px 14px 0 rgba(37, 99, 235, 0.15)' : undefined,
                     }}
                     onClick={() => {
+                      if (isExpiredProduct) {
+                        showWarning(
+                          toast,
+                          `Produk "${item.nama}" sudah kadaluarsa (${item.tanggal_kadaluarsa_terdekat || item.tanggal_kadaluarsa || '-'}) dan tidak dapat dipilih.`
+                        );
+                        return;
+                      }
+                      if (isOutOfStockProduct) {
+                        showWarning(
+                          toast,
+                          `Stok produk "${item.nama}" yang layak jual tidak tersedia (stok: 0).`
+                        );
+                        return;
+                      }
                       if (isPendaftaranLocked) {
                         showError(
                           toast,
@@ -1110,6 +1205,56 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                             {item.nama_kategori || (isProduk ? 'Produk' : 'Layanan')}
                           </span>
 
+                          {isProduk && item.is_expired && (
+                            <span
+                              className="inline-flex align-items-center font-bold text-white shadow-1"
+                              style={{
+                                fontSize: '9.5px',
+                                padding: '3px 8px',
+                                borderRadius: '9999px',
+                                backgroundColor: '#dc2626',
+                                lineHeight: '1.2',
+                                letterSpacing: '0.01em',
+                                gap: '4px',
+                              }}
+                              title={item.alasan_expired || 'Batch produk ini sudah kadaluarsa — Tidak dapat dijual'}
+                            >
+                              <i className="pi pi-exclamation-triangle" style={{ fontSize: '9px' }} />
+                              Kadaluarsa
+                            </span>
+                          )}
+
+                          {isProduk && !item.is_expired && isOutOfStockProduct && (
+                            <span
+                              className="inline-flex align-items-center font-bold text-white shadow-1"
+                              style={{
+                                fontSize: '9.5px',
+                                padding: '3px 8px',
+                                borderRadius: '9999px',
+                                backgroundColor: '#ef4444',
+                                lineHeight: '1.2',
+                                letterSpacing: '0.01em',
+                                gap: '4px',
+                              }}
+                            >
+                              <i className="pi pi-ban" style={{ fontSize: '9px' }} />
+                              Stok Habis
+                            </span>
+                          )}
+
+                          {isSelected && (item.produk_expired_override || item.is_expired) && (
+                            <Tag
+                              rounded
+                              value="⚠️ Override Kadaluarsa"
+                              severity="danger"
+                              style={{
+                                fontSize: '9.5px',
+                                padding: '2px 6px',
+                                fontWeight: 700,
+                              }}
+                            />
+                          )}
+
                           {isPaket && (
                             <Tag
                               rounded
@@ -1123,6 +1268,44 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                                 borderRadius: '9999px',
                               }}
                             />
+                          )}
+
+                          {!isProduk && (
+                            Boolean(item.is_include_konsultasi === true || item.is_include_konsultasi === 1 || item.is_include_konsultasi === '1') ? (
+                              <span
+                                className="inline-flex align-items-center font-bold text-white shadow-1"
+                                style={{
+                                  fontSize: '9.5px',
+                                  padding: '2px 8px',
+                                  borderRadius: '9999px',
+                                  backgroundColor: '#16a34a',
+                                  lineHeight: 1.2,
+                                  gap: '3px',
+                                }}
+                                title="Tindakan ini sudah include/gratis biaya konsultasi dokter di awal"
+                              >
+                                <i className="pi pi-check-circle" style={{ fontSize: '9px' }} />
+                                <span>Include Konsul</span>
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex align-items-center font-medium shadow-1"
+                                style={{
+                                  fontSize: '9.5px',
+                                  padding: '2px 8px',
+                                  borderRadius: '9999px',
+                                  lineHeight: 1.2,
+                                  gap: '3px',
+                                  backgroundColor: '#f1f5f9',
+                                  color: '#475569',
+                                  border: '1px solid #cbd5e1',
+                                }}
+                                title="Tidak include konsultasi (bayar terpisah)"
+                              >
+                                <i className="pi pi-times-circle" style={{ fontSize: '9px', color: '#94a3b8' }} />
+                                <span>Tidak Include</span>
+                              </span>
+                            )
                           )}
 
                           {isService && isCapacityLocked && (
@@ -1190,11 +1373,28 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                       <div className="pt-2 mt-2 border-top-1 surface-border flex align-items-center justify-content-between gap-2">
                         {isProduk ? (
                           <div
-                            className="inline-flex align-items-center text-xs text-600 font-medium"
-                            style={{ gap: '5px' }}
+                            className="inline-flex align-items-center text-xs text-600 font-medium white-space-nowrap"
+                            style={{ gap: '4px' }}
                           >
                             <i className="pi pi-box text-xs text-500 flex-shrink-0" />
-                            <span className="white-space-nowrap">{item.satuan || 'pcs'}</span>
+                            <span>
+                              Stok:{' '}
+                              <strong
+                                className={
+                                  (item.stok_layak_jual !== undefined
+                                    ? item.stok_layak_jual
+                                    : (item.stok_tersedia ?? 0)) <= 0
+                                    ? 'text-red-500 font-bold'
+                                    : 'text-800 font-bold'
+                                }
+                              >
+                                {item.stok_layak_jual !== undefined
+                                  ? item.stok_layak_jual
+                                  : item.stok_tersedia !== undefined
+                                  ? item.stok_tersedia
+                                  : '-'}
+                              </strong>
+                            </span>
                           </div>
                         ) : (
                           <div className="inline-flex align-items-center gap-1 text-xs text-600 font-medium min-w-0">
@@ -1206,21 +1406,21 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                         )}
 
                         {isProduk && isSelected ? (
-                          <div className="flex align-items-center" style={{ gap: '10px' }} onClick={(e) => e.stopPropagation()}>
+                          <div className="flex align-items-center flex-shrink-0" style={{ gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
                               onClick={() => handleQtyChange(item, (selectedObj?.qty || 1) - 1)}
-                              className="w-2rem h-2rem border-round-lg border-1 border-300 surface-50 cursor-pointer font-black text-base flex align-items-center justify-content-center text-700 hover:surface-200 transition-colors shadow-1 flex-shrink-0"
+                              className="border-round-lg border-1 border-300 surface-50 cursor-pointer font-black text-base flex align-items-center justify-content-center text-700 hover:surface-200 transition-colors shadow-1 flex-shrink-0"
                               title="Kurangi Jumlah"
-                              style={{ minWidth: '32px', minHeight: '32px' }}
+                              style={{ width: '28px', height: '28px' }}
                             >
                               −
                             </button>
                             <span
                               className="text-center font-bold text-amber-900 select-none"
                               style={{
-                                fontSize: '15px',
-                                minWidth: '22px',
+                                fontSize: '14.5px',
+                                minWidth: '18px',
                                 display: 'inline-block',
                               }}
                             >
@@ -1228,14 +1428,15 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                             </span>
                             <button
                               type="button"
+                              disabled={(selectedObj?.qty || 1) >= maxStockProduct}
                               onClick={() => handleQtyChange(item, (selectedObj?.qty || 1) + 1)}
-                              className="w-2rem h-2rem border-round-lg border-none text-white cursor-pointer font-black text-base flex align-items-center justify-content-center shadow-2 hover:opacity-90 transition-opacity flex-shrink-0"
+                              className={`border-round-lg border-none text-white font-black text-base flex align-items-center justify-content-center shadow-2 flex-shrink-0 transition-opacity ${(selectedObj?.qty || 1) >= maxStockProduct ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:opacity-90'}`}
                               style={{
                                 background: '#d97706',
-                                minWidth: '32px',
-                                minHeight: '32px',
+                                width: '28px',
+                                height: '28px',
                               }}
-                              title="Tambah Jumlah"
+                              title={(selectedObj?.qty || 1) >= maxStockProduct ? `Maksimal stok tercapai (${maxStockProduct})` : 'Tambah Jumlah'}
                             >
                               +
                             </button>
@@ -1259,8 +1460,8 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
 
       {/* ── SELECTED SUMMARY DRAWER BAR ── */}
       {cleanSelectedItems.length > 0 && (
-        <div className="mt-4 p-3 border-round-xl flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-3 surface-card border-1 surface-border shadow-1">
-          <div className="flex align-items-center gap-3">
+        <div className="mt-4 p-3 border-round-xl flex flex-column lg:flex-row align-items-start lg:align-items-center justify-content-between gap-3 surface-card border-1 surface-border shadow-1">
+          <div className="flex align-items-center gap-3 min-w-0 flex-1">
             <div
               className="border-circle flex align-items-center justify-content-center flex-shrink-0"
               style={{
@@ -1273,18 +1474,24 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
             >
               <i className="pi pi-check font-bold" style={{ fontSize: '14px' }} />
             </div>
-            <div>
-              <span className="text-xs font-bold text-700 block mb-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-bold text-700 block mb-1.5">
                 {cleanSelectedItems.length} Item Terpilih untuk Rekomendasi
               </span>
-              <div className="flex align-items-center flex-wrap" style={{ gap: '10px' }}>
+              <div
+                className="flex align-items-center flex-nowrap overflow-x-auto pb-1"
+                style={{
+                  gap: '8px',
+                  scrollbarWidth: 'thin',
+                }}
+              >
                 {cleanSelectedItems.map((item, idx) => {
                   const isLocked = item.is_locked || item.is_pendaftaran;
                   const isProd = (item.jenis || '').includes('produk');
                   return (
                     <div
                       key={idx}
-                      className={`inline-flex align-items-center border-round-xl font-bold shadow-1 ${
+                      className={`inline-flex align-items-center border-round-xl font-bold shadow-1 flex-shrink-0 ${
                         isLocked
                           ? 'bg-amber-50 text-amber-900 border-1 border-amber-300'
                           : isProd
@@ -1292,9 +1499,9 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                           : 'surface-card text-900 border-1 surface-border'
                       }`}
                       style={{
-                        padding: '6px 14px',
-                        gap: '8px',
-                        fontSize: '12.5px',
+                        padding: '6px 12px',
+                        gap: '6px',
+                        fontSize: '12px',
                         lineHeight: 1.2,
                       }}
                     >
@@ -1306,6 +1513,14 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
                         <i className="pi pi-sparkles text-primary text-xs flex-shrink-0" />
                       )}
                       <span className="white-space-nowrap">{item.nama}</span>
+                      {(item.produk_expired_override || item.is_expired) && (
+                        <span
+                          className="px-2 py-0.5 border-round font-extrabold text-white text-[10px] ml-1 shadow-1"
+                          style={{ backgroundColor: '#dc2626' }}
+                        >
+                          ⚠️ Override Kadaluarsa
+                        </span>
+                      )}
                       {item.qty && item.qty > 1 && (
                         <span
                           className="px-2 py-0.5 border-round font-extrabold text-white text-xs ml-1 shadow-1"
@@ -1321,10 +1536,23 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
             </div>
           </div>
 
-          <div className="flex align-items-center gap-3 w-full sm:w-auto justify-content-between sm:justify-content-end border-top-1 sm:border-top-none pt-2 sm:pt-0 surface-border">
-            <div className="text-right">
-              <span className="text-[10px] text-500 block font-semibold uppercase">Total Estimasi</span>
-              <span className="text-base font-black text-primary">{formatRupiah(totalHargaSelected)}</span>
+          <div className="flex align-items-center gap-3 flex-shrink-0 justify-content-between lg:justify-content-end w-full lg:w-auto border-top-1 lg:border-top-none pt-2 lg:pt-0 surface-border">
+            <div className="text-right flex flex-column justify-content-center" style={{ gap: '3px' }}>
+              <div className="flex align-items-baseline justify-content-end gap-1.5" style={{ lineHeight: 1.1 }}>
+                <span className="text-xs text-500 font-bold uppercase tracking-wide">Total Estimasi:</span>
+                <span className="text-base font-black text-primary">{formatRupiah(totalHargaSelected)}</span>
+              </div>
+              {isAllIncludeKonsul ? (
+                <span className="text-[10.5px] font-bold text-emerald-600" style={{ lineHeight: 1.1 }}>
+                  <i className="pi pi-check-circle mr-1" style={{ fontSize: '9px' }} />
+                  Bebas Biaya Konsultasi (Include)
+                </span>
+              ) : isNonIncludeActive ? (
+                <span className="text-[10.5px] font-semibold text-blue-600" style={{ lineHeight: 1.1 }}>
+                  <i className="pi pi-info-circle mr-1" style={{ fontSize: '9px' }} />
+                  Termasuk Jasa Konsultasi ({formatRupiah(consultFee)})
+                </span>
+              ) : null}
             </div>
 
             <Button
@@ -1333,7 +1561,8 @@ export const RekomendasiTreatmentPanel: React.FC<RekomendasiTreatmentPanelProps>
               outlined
               severity="danger"
               size="small"
-              className="font-bold text-xs border-round-lg"
+              className="font-bold text-xs border-round-lg flex-shrink-0"
+              style={{ height: '34px', padding: '0 12px' }}
               onClick={() => onChangeSelectedItems(selectedItems.filter((i) => i.is_locked || i.is_pendaftaran))}
             />
           </div>

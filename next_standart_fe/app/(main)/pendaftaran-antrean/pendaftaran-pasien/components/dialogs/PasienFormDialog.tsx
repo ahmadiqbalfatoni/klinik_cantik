@@ -360,9 +360,9 @@ export const PasienFormDialog: React.FC<Props> = ({
       setActiveTab(0);
       return;
     }
-    if (!formData.no_hp.trim()) {
-      showError(toast, 'Nomor HP pasien wajib diisi');
-      setActiveTab(2);
+    if (!formData.nik.trim() || formData.nik.trim().length !== 16) {
+      showError(toast, 'NIK wajib diisi (16 digit angka)');
+      setActiveTab(0);
       return;
     }
     if (!formData.tanggal_lahir) {
@@ -370,10 +370,14 @@ export const PasienFormDialog: React.FC<Props> = ({
       setActiveTab(0);
       return;
     }
-
-    if (formData.nik && formData.nik.trim().length !== 16) {
-      showError(toast, 'NIK harus terdiri dari 16 digit angka');
-      setActiveTab(0);
+    if (!formData.provinsi || !formData.provinsi.trim()) {
+      showError(toast, 'Provinsi wajib dipilih');
+      setActiveTab(1);
+      return;
+    }
+    if (!formData.no_hp.trim()) {
+      showError(toast, 'Nomor HP pasien wajib diisi');
+      setActiveTab(2);
       return;
     }
 
@@ -491,8 +495,22 @@ export const PasienFormDialog: React.FC<Props> = ({
                 iconPos="right"
                 className="p-button-primary font-bold"
                 onClick={() => {
-                  if (activeTab === 0 && !formData.nama.trim()) {
-                    showError(toast, 'Nama Pasien wajib diisi');
+                  if (activeTab === 0) {
+                    if (!formData.nama.trim()) {
+                      showError(toast, 'Nama Pasien wajib diisi');
+                      return;
+                    }
+                    if (!formData.nik.trim() || formData.nik.trim().length !== 16) {
+                      showError(toast, 'NIK wajib diisi (16 digit angka)');
+                      return;
+                    }
+                    if (!formData.tanggal_lahir) {
+                      showError(toast, 'Tanggal Lahir wajib diisi');
+                      return;
+                    }
+                  }
+                  if (activeTab === 1 && (!formData.provinsi || !formData.provinsi.trim())) {
+                    showError(toast, 'Provinsi wajib dipilih');
                     return;
                   }
                   if (activeTab === 2 && !formData.no_hp.trim()) {
@@ -528,7 +546,7 @@ export const PasienFormDialog: React.FC<Props> = ({
               />
             </div>
             <div className="col-12 md:col-6 field">
-              <label className="font-semibold text-900">NIK (16 Digit)</label>
+              <label className="font-semibold text-900">NIK (16 Digit) <span className="text-red-500">*</span></label>
               <InputText
                 value={formData.nik}
                 onChange={(e) => handleChange('nik', e.target.value)}
@@ -651,7 +669,7 @@ export const PasienFormDialog: React.FC<Props> = ({
         <TabPanel header="Alamat" leftIcon="pi pi-map-marker mr-2">
           <div className="grid p-fluid mt-1">
             <div className="col-12 md:col-6 field">
-              <label className="font-semibold text-900">Provinsi</label>
+              <label className="font-semibold text-900">Provinsi <span className="text-red-500">*</span></label>
               <Dropdown
                 value={kodeProvinsi}
                 options={provList.map((p) => ({ label: p.nama, value: p.kode }))}

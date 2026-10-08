@@ -10,7 +10,7 @@
 
 import express from "express";
 import DB from "../../../../core/config/knex.js";
-import { formatDateSystem, getJakartaMinutesNow, getJakartaYmdNow } from "../../components/tools/date_tools.js";
+import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
 import { getBranchScope } from "../../components/tools/branch_scope.js";
@@ -160,10 +160,11 @@ router.post("/", async (req, res) => {
       sessionMap.get(sessionKey).rows.push(jdw);
     }
 
-    // Cek apakah tanggal booking adalah hari ini (WIB / Asia/Jakarta)
-    const todayYmd = getJakartaYmdNow();
+    // Cek apakah tanggal booking adalah hari ini
+    const todayYmd = formatDateSystem(new Date(), "yyyy-MM-dd") || new Date().toISOString().slice(0, 10);
     const isBookingToday = cleanDateStr === todayYmd;
-    const nowMinutes = getJakartaMinutesNow();
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
     // 5. Bangun 1 slot per sesi dengan info utama Petugas Penanggung Jawab (PJ) dan kuota milik PJ
     const vaSlots = [];

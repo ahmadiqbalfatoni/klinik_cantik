@@ -16,8 +16,9 @@ import { Divider } from 'primereact/divider';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
-import { showError, showSuccess, formatImageUrl } from '@/lib/tools/generalTools';
+import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { ImageCropDialog } from '../components/ImageCropDialog';
+import { KeteranganStatus } from '@/app/components/KeteranganStatus';
 
 const Page = () => {
     const toast = useRef<Toast>(null);
@@ -120,7 +121,7 @@ const Page = () => {
             no_batch: rowData.no_batch || '',
             tanggal_kadaluarsa: rowData.tanggal_kadaluarsa ? String(rowData.tanggal_kadaluarsa).slice(0, 10) : '',
             foto: null,
-            foto_url: formatImageUrl(rowData.foto) || '',
+            foto_url: rowData.foto || '',
             hapus_foto: false,
         });
         setDialogVisible(true);
@@ -355,20 +356,7 @@ const Page = () => {
                                     />
                                 </div>
                             </div>
-                            <div className="flex flex-wrap align-items-center gap-3 px-1 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                                <span className="flex align-items-center gap-1">
-                                    <i className="pi pi-info-circle" />
-                                    <span className="font-semibold">KETERANGAN:</span>
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span style={{ display:'inline-block', width:'12px', height:'12px', borderRadius:'3px', backgroundColor:'#22c55e', boxShadow:'0 1px 3px #22c55e55' }} />
-                                    Status Aktif
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span style={{ display:'inline-block', width:'12px', height:'12px', borderRadius:'3px', backgroundColor:'#ef4444', boxShadow:'0 1px 3px #ef444455' }} />
-                                    Status Tidak Aktif
-                                </span>
-                            </div>
+                            <KeteranganStatus className="mb-2" />
                         </div>
                     }
                 >
@@ -413,7 +401,7 @@ const Page = () => {
                             >
                                 {r.foto ? (
                                     <img
-                                        src={formatImageUrl(r.foto)}
+                                        src={r.foto}
                                         alt={r.nama}
                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                         onError={(e: any) => {
@@ -435,8 +423,8 @@ const Page = () => {
                     <Column field="nama" header="Nama Produk" sortable headerStyle={{ fontWeight: 'bold' }}></Column>
                     <Column field="nama_kategori" header="Kategori" body={(r) => r.nama_kategori || r.kode_kategori_produk || '-'}></Column>
                     <Column field="satuan" header="Satuan"></Column>
-                    <Column field="no_batch" header="No. Batch" body={(r) => r.no_batch || '-'}></Column>
-                    <Column field="tanggal_kadaluarsa" header="Tgl Kadaluarsa" body={(r) => r.tanggal_kadaluarsa ? String(r.tanggal_kadaluarsa).slice(0, 10) : '-'}></Column>
+                    <Column field="no_batch" header="Batch Terdekat" body={(r) => r.no_batch ? <span className="font-mono text-gray-700 font-semibold">{r.no_batch}</span> : <span className="text-gray-400 italic text-xs">-</span>}></Column>
+                    <Column field="tanggal_kadaluarsa" header="Tgl Kadaluarsa" body={(r) => r.tanggal_kadaluarsa ? String(r.tanggal_kadaluarsa).slice(0, 10) : <span className="text-gray-400 italic text-xs">-</span>}></Column>
                     <Column field="harga_beli" header="Harga Beli" body={(r) => formatRupiah(r.harga_beli)}></Column>
                     <Column field="harga_jual" header="Harga Jual" body={(r) => <span className="font-semibold text-green-600">{formatRupiah(r.harga_jual)}</span>}></Column>
                     <Column
@@ -532,7 +520,7 @@ const Page = () => {
                                         />
                                     ) : (
                                         <img
-                                            src={formatImageUrl(formData.foto_url)}
+                                            src={formData.foto_url}
                                             alt="Preview"
                                             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                                             onError={(e: any) => {
@@ -633,7 +621,7 @@ const Page = () => {
                     </div>
                     <div className="p-2 border-round surface-100 text-xs text-color-secondary flex align-items-center gap-2 mt-1">
                         <i className="pi pi-info-circle text-primary text-sm" />
-                        <span>Kuantitas stok fisik, batas minimum, dan restock produk dikelola melalui menu <strong>Inventori</strong>.</span>
+                        <span>Kuantitas stok fisik, pengadaan multi-batch, dan tanggal kadaluarsa per batch dikelola lengkap melalui menu <strong>Inventori</strong>.</span>
                     </div>
                 </div>
                 <div className="flex justify-content-end gap-2 mt-4">

@@ -39,10 +39,20 @@ router.post("/", async (req, res) => {
     const jenis_kelamin = (oPayload.jenis_kelamin || "").trim().toUpperCase();
     const nik = (oPayload.nik || "").trim();
 
+    const cleanStr = (val) => (val !== undefined && val !== null && String(val).trim() !== "" ? String(val).trim() : null);
+
     if (!nama) {
       return res.status(422).json({
         status: status.BAD_REQUEST,
         message: "Nama pasien wajib diisi",
+        datetime: formatDateSystem(),
+      });
+    }
+
+    if (!nik || !/^\d{16}$/.test(nik)) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: "NIK wajib diisi dan harus terdiri dari 16 digit angka",
         datetime: formatDateSystem(),
       });
     }
@@ -84,36 +94,39 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (!jenis_kelamin || !["L", "P"].includes(jenis_kelamin)) {
+    const provinsi = cleanStr(oPayload.provinsi);
+    if (!provinsi) {
       return res.status(422).json({
         status: status.BAD_REQUEST,
-        message: "Jenis kelamin wajib dipilih (L / P)",
+        message: "Provinsi wajib diisi/dipilih",
         datetime: formatDateSystem(),
       });
     }
 
-    if (nik) {
-      if (!/^\d{16}$/.test(nik)) {
-        return res.status(422).json({
-          status: status.BAD_REQUEST,
-          message: "NIK harus terdiri dari 16 digit angka",
-          datetime: formatDateSystem(),
-        });
-      }
+    const existingNik = await DB("mst_pasien")
+      .where("nik", nik)
+      .where("status", "aktif")
+      .first();
 
-      const existingNik = await DB("mst_pasien")
-        .where("nik", nik)
-        .where("status", "aktif")
-        .first();
-
-      if (existingNik) {
-        return res.status(422).json({
-          status: status.BAD_REQUEST,
-          message: `NIK ${nik} sudah terdaftar atas nama ${existingNik.nama} (RM: ${existingNik.no_rm})`,
-          datetime: formatDateSystem(),
-        });
-      }
+    if (existingNik) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: `NIK ${nik} sudah terdaftar atas nama ${existingNik.nama} (RM: ${existingNik.no_rm})`,
+        datetime: formatDateSystem(),
+      });
     }
+
+    const validGolDarah = ["A", "B", "AB", "O", "-"];
+    const validAgama = ["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Konghucu", "Lainnya"];
+    const validStatusNikah = ["belum_menikah", "menikah", "cerai_hidup", "cerai_mati"];
+    const validKewarganegaraan = ["WNI", "WNA"];
+    const validJenisKelamin = ["L", "P"];
+
+    const safeGolDarah = validGolDarah.includes(oPayload.golongan_darah) ? oPayload.golongan_darah : null;
+    const safeAgama = validAgama.includes(oPayload.agama) ? oPayload.agama : null;
+    const safeStatusNikah = validStatusNikah.includes(oPayload.status_perkawinan) ? oPayload.status_perkawinan : null;
+    const safeKewarganegaraan = validKewarganegaraan.includes(oPayload.kewarganegaraan) ? oPayload.kewarganegaraan : "WNI";
+    const safeJenisKelamin = validJenisKelamin.includes(jenis_kelamin) ? jenis_kelamin : "L";
 
     // ─── TRANSAKSI DB HANYA UNTUK MST_PASIEN ──────────────────────────────────
     let resultData = null;
@@ -141,29 +154,29 @@ router.post("/", async (req, res) => {
         kode_cabang: branchCode,
         no_rm: cNoRm,
         nama: nama,
-        nik: nik || null,
-        tempat_lahir: oPayload.tempat_lahir || null,
+        nik: nik,
+        tempat_lahir: cleanStr(oPayload.tempat_lahir),
         tanggal_lahir: tanggal_lahir,
-        jenis_kelamin: jenis_kelamin,
-        golongan_darah: oPayload.golongan_darah || null,
-        agama: oPayload.agama || null,
-        status_perkawinan: oPayload.status_perkawinan || null,
-        kewarganegaraan: oPayload.kewarganegaraan || "WNI",
-        pekerjaan: oPayload.pekerjaan || null,
-        provinsi: oPayload.provinsi || null,
-        kota_kabupaten: oPayload.kota_kabupaten || null,
-        kecamatan: oPayload.kecamatan || null,
-        kelurahan_desa: oPayload.kelurahan_desa || null,
-        kode_pos: oPayload.kode_pos || null,
-        patokan: oPayload.patokan || null,
+        jenis_kelamin: safeJenisKelamin,
+        golongan_darah: safeGolDarah,
+        agama: safeAgama,
+        status_perkawinan: safeStatusNikah,
+        kewarganegaraan: safeKewarganegaraan,
+        pekerjaan: cleanStr(oPayload.pekerjaan),
+        provinsi: provinsi,
+        kota_kabupaten: cleanStr(oPayload.kota_kabupaten),
+        kecamatan: cleanStr(oPayload.kecamatan),
+        kelurahan_desa: cleanStr(oPayload.kelurahan_desa),
+        kode_pos: cleanStr(oPayload.kode_pos),
+        patokan: cleanStr(oPayload.patokan),
         no_hp: cleanPhone,
-        email: oPayload.email || null,
-        nama_kontak_darurat: oPayload.nama_kontak_darurat || null,
-        no_hp_kontak_darurat: oPayload.no_hp_kontak_darurat || null,
-        hubungan_kontak_darurat: oPayload.hubungan_kontak_darurat || null,
-        alergi: oPayload.alergi || null,
-        foto: oPayload.foto || null,
-        status: "aktif",
+        email: cleanStr(oPayload.email),
+        nama_kontak_darurat: cleanStr(oPayload.nama_kontak_darurat),
+        no_hp_kontak_darurat: cleanStr(oPayload.no_hp_kontak_darurat),
+        hubungan_kontak_darurat: cleanStr(oPayload.hubungan_kontak_darurat),
+        alergi: cleanStr(oPayload.alergi),
+        foto: cleanStr(oPayload.foto),
+        status: ["aktif", "nonaktif"].includes(oPayload.status) ? oPayload.status : "aktif",
         tz: oPayload.tz || "Asia/Jakarta",
         created_by: username,
         created_at: formatDateSystem(),

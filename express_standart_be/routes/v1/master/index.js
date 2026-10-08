@@ -41,10 +41,13 @@ import supplierUpdate from "./supplier/supplier_update.js";
 import supplierDelete from "./supplier/supplier_delete.js";
 
 import inventoriData from "./inventori/inventori_data.js";
+import inventoriPengadaan from "./inventori/inventori_pengadaan.js";
 import inventoriBeliBaru from "./inventori/inventori_beli_baru.js";
 import inventoriRestock from "./inventori/inventori_restock.js";
 import inventoriPoData from "./inventori/inventori_po_data.js";
 import inventoriMutasiData from "./inventori/inventori_mutasi_data.js";
+import inventoriBatchData from "./inventori/inventori_batch_data.js";
+import inventoriBatchUpdate from "./inventori/inventori_batch_update.js";
 
 import karyawanData from "./karyawan/karyawan_data.js";
 import karyawanCreate from "./karyawan/karyawan_create.js";
@@ -92,6 +95,8 @@ import kasirList from "./kasir/kasir_list.js";
 import kasirDetail from "./kasir/kasir_detail.js";
 import kasirSave from "./kasir/kasir_save.js";
 import kasirBayar from "./kasir/kasir_bayar.js";
+import kasirShift from "./kasir/kasir_shift.js";
+import kasirTrackingKas from "./kasir/kasir_tracking_kas.js";
 
 import rekamMedisPasien from "./rekam_medis/rekam_medis_pasien.js";
 import transaksiPasien from "./rekam_medis/transaksi_pasien.js";
@@ -165,10 +170,13 @@ router.use("/supplier-delete", supplierDelete);
 
 // Inventori
 router.use("/inventori-data", inventoriData);
+router.use("/inventori-pengadaan", inventoriPengadaan);
 router.use("/inventori-beli-baru", inventoriBeliBaru);
 router.use("/inventori-restock", inventoriRestock);
 router.use("/inventori-po-data", inventoriPoData);
 router.use("/inventori-mutasi-data", inventoriMutasiData);
+router.use("/inventori-batch-data", inventoriBatchData);
+router.use("/inventori-batch-update", inventoriBatchUpdate);
 
 // Karyawan
 router.use("/karyawan-data", karyawanData);
@@ -212,6 +220,8 @@ router.use("/kasir-list", kasirList);
 router.use("/kasir-detail", kasirDetail);
 router.use("/kasir-save", kasirSave);
 router.use("/kasir-bayar", kasirBayar);
+router.use("/kasir-shift", kasirShift);
+router.use("/kasir-tracking-kas", kasirTrackingKas);
 
 // Rekam Medis Pasien & Laporan Transaksi
 router.use("/pasien-rekam-medis", rekamMedisPasien);

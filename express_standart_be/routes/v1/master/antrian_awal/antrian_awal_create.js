@@ -77,18 +77,17 @@ router.post("/", async (req, res) => {
       const prefixAntrian = `A-${todayStr}-`;
 
       await DB.transaction(async (trx) => {
-        // Ambil semua kode antrian awal hari ini secara global (lintas cabang) agar kode_antrian_awal selalu unik
-        const existingCodesToday = await trx("trx_antrian_awal")
+        const lastRecord = await trx("trx_antrian_awal")
           .where("kode_antrian_awal", "like", `${prefixAntrian}%`)
-          .select("kode_antrian_awal");
-
-        const existingCodeSet = new Set(existingCodesToday.map((r) => r.kode_antrian_awal));
+          .where("kode_cabang", branchCode)
+          .orderBy("id", "desc")
+          .first();
 
         let nextSeq = 1;
-        for (const rec of existingCodesToday) {
-          const parts = (rec.kode_antrian_awal || "").split("-");
+        if (lastRecord && lastRecord.kode_antrian_awal) {
+          const parts = lastRecord.kode_antrian_awal.split("-");
           const lastNum = parseInt(parts[parts.length - 1], 10);
-          if (!isNaN(lastNum) && lastNum >= nextSeq) {
+          if (!isNaN(lastNum)) {
             nextSeq = lastNum + 1;
           }
         }
@@ -108,13 +107,8 @@ router.post("/", async (req, res) => {
             continue;
           }
 
-          while (existingCodeSet.has(`${prefixAntrian}${String(nextSeq).padStart(3, "0")}`)) {
-            nextSeq++;
-          }
-
           const seqPadded = String(nextSeq).padStart(3, "0");
           const cKodeAntrian = `${prefixAntrian}${seqPadded}`;
-          existingCodeSet.add(cKodeAntrian);
           nextSeq++;
 
           const oData = {
@@ -205,24 +199,19 @@ router.post("/", async (req, res) => {
       const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const prefixAntrian = `A-${todayStr}-`;
 
-      // Ambil semua kode antrian awal hari ini secara global (lintas cabang) agar kode_antrian_awal selalu unik
-      const existingCodesToday = await trx("trx_antrian_awal")
+      const lastRecord = await trx("trx_antrian_awal")
         .where("kode_antrian_awal", "like", `${prefixAntrian}%`)
-        .select("kode_antrian_awal");
-
-      const existingCodeSet = new Set(existingCodesToday.map((r) => r.kode_antrian_awal));
+        .where("kode_cabang", branchCode)
+        .orderBy("id", "desc")
+        .first();
 
       let nextSeq = 1;
-      for (const rec of existingCodesToday) {
-        const parts = (rec.kode_antrian_awal || "").split("-");
+      if (lastRecord && lastRecord.kode_antrian_awal) {
+        const parts = lastRecord.kode_antrian_awal.split("-");
         const lastNum = parseInt(parts[parts.length - 1], 10);
-        if (!isNaN(lastNum) && lastNum >= nextSeq) {
+        if (!isNaN(lastNum)) {
           nextSeq = lastNum + 1;
         }
-      }
-
-      while (existingCodeSet.has(`${prefixAntrian}${String(nextSeq).padStart(3, "0")}`)) {
-        nextSeq++;
       }
 
       const seqPadded = String(nextSeq).padStart(3, "0");
@@ -289,14 +278,9 @@ router.post("/", async (req, res) => {
       });
     }
 
-    let userMsg = error.message || "Sistem sedang maintenance harap tunggu sebentar";
-    if (error.code === "ER_DUP_ENTRY" || (typeof userMsg === "string" && userMsg.includes("Duplicate entry"))) {
-      userMsg = "Nomor atau kode antrian sudah terdaftar di sistem. Silakan muat ulang halaman dan coba lagi.";
-    }
-
     const oResult = {
       status: status.BAD_REQUEST,
-      message: userMsg,
+      message: error.message || "Sistem sedang maintenance harap tunggu sebentar",
       datetime: formatDateSystem(),
     };
 

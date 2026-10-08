@@ -25,6 +25,7 @@ import { apiEndpointDelete, apiEndpointGetEdit, apiEndpointGetGudang, apiEndpoin
 import { Tooltip } from 'primereact/tooltip';
 import { useReactToPrint } from 'react-to-print';
 import CetakNota from './cetakNota';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 const Table = ({
     dataRekap,
@@ -470,21 +471,14 @@ const Table = ({
                 </div>
 
                 {/* BOX KETERANGAN STATUS (LEGEND) MUTASI */}
-                <div className="flex flex-wrap align-items-center gap-4 mb-3 p-3 surface-50 border-round-xl border-1 surface-border">
-                    <span className="flex align-items-center text-xs font-bold text-500 uppercase tracking-wider mr-2">
-                        <i className="pi pi-info-circle mr-2"></i> Keterangan Status Mutasi:
-                    </span>
-
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-green-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Sudah Diterima</span>
-                    </div>
-
-                    <div className="flex align-items-center gap-2">
-                        <span className="block bg-red-500 border-round-sm" style={{ width: '12px', height: '12px' }}></span>
-                        <span className="text-xs font-semibold text-700">Belum Diterima</span>
-                    </div>
-                </div>
+                <KeteranganStatus
+                    className="mb-3"
+                    title="KETERANGAN STATUS MUTASI:"
+                    items={[
+                        { label: 'Sudah Diterima', color: '#22c55e' },
+                        { label: 'Belum Diterima', color: '#ef4444' },
+                    ]}
+                />
                 <Tooltip target=".status-box-tooltip" position="top" style={{ whiteSpace: 'nowrap' }} />
 
                 <DataTable

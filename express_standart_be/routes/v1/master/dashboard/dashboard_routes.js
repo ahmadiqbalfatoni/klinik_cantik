@@ -15,6 +15,8 @@ const router = express.Router();
 router.post("/role-data", async (req, res) => {
   const { body } = req;
   const role = (body.role || "owner").toLowerCase();
+  const username = req?.auth?.username || body.username || "";
+  const userCode = req?.auth?.user_code || body.user_code || "";
   const branchCode = getBranchScope(req, body.kode_cabang);
 
   try {
@@ -277,16 +279,97 @@ router.post("/role-data", async (req, res) => {
         "t.status"
       );
     if (branchCode) qTrxKasir.where("t.kode_cabang", branchCode);
+    if (role === "kasir") {
+      qTrxKasir.where(function () {
+        if (username) this.where("t.updated_by", username).orWhere("t.created_by", username);
+        if (userCode) this.orWhere("t.updated_by", userCode).orWhere("t.created_by", userCode);
+      });
+    }
     const transaksiKasir = await qTrxKasir
       .orderBy("t.created_at", "desc")
       .limit(10);
 
-    const qTotalKasir = DB("trx_transaksi")
-      .count("id as total_trx")
-      .sum("total_bayar as total_bayar")
-      .sum("total_diskon as total_diskon");
-    if (branchCode) qTotalKasir.where("kode_cabang", branchCode);
-    const totalTrxKasirToday = await qTotalKasir.first();
+    const qTotalKasir = DB("trx_transaksi as t")
+      .whereIn("t.status", ["lunas", "selesai"]);
+    if (branchCode) qTotalKasir.where("t.kode_cabang", branchCode);
+    if (role === "kasir") {
+      qTotalKasir.where(function () {
+        if (username) this.where("t.updated_by", username).orWhere("t.created_by", username);
+        if (userCode) this.orWhere("t.updated_by", userCode).orWhere("t.created_by", userCode);
+      });
+    }
+    const totalTrxKasirToday = await qTotalKasir
+      .count("t.id as total_trx")
+      .sum("t.total_bayar as total_bayar")
+      .sum("t.total_diskon as total_diskon")
+      .first();
+
+    let kasirMetodeBreakdown = [];
+    let kasirWeeklyTrend = { labels: [], values: [] };
+    let kasirActiveShift = null;
+
+    if (role === "kasir") {
+      // Breakdown metode bayar khusus kasir ini
+      const qMetode = DB("trx_transaksi as t")
+        .select("t.metode_bayar")
+        .count("t.id as jumlah_trx")
+        .sum("t.total_bayar as nominal")
+        .whereIn("t.status", ["lunas", "selesai"]);
+      if (branchCode) qMetode.where("t.kode_cabang", branchCode);
+      qMetode.where(function () {
+        if (username) this.where("t.updated_by", username).orWhere("t.created_by", username);
+        if (userCode) this.orWhere("t.updated_by", userCode).orWhere("t.created_by", userCode);
+      });
+      qMetode.groupBy("t.metode_bayar");
+      kasirMetodeBreakdown = (await qMetode).map((r) => ({
+        metode_bayar: (r.metode_bayar || "TUNAI").toUpperCase(),
+        jumlah_trx: parseInt(r.jumlah_trx || 0, 10),
+        nominal: parseFloat(r.nominal || 0),
+      }));
+
+      // Tren 7 Hari Terakhir untuk kasir ini
+      const dayNames = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+      const labels = [];
+      const dateKeys = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const ymd = formatDateSystem(d, "yyyy-MM-dd");
+        labels.push(dayNames[d.getDay()]);
+        dateKeys.push(ymd);
+      }
+
+      const qWeekly = DB("trx_transaksi as t")
+        .select(DB.raw("DATE(t.tanggal_transaksi) as tgl"))
+        .sum("t.total_bayar as total")
+        .whereIn("t.status", ["lunas", "selesai"])
+        .whereRaw("DATE(t.tanggal_transaksi) >= ?", [dateKeys[0]])
+        .whereRaw("DATE(t.tanggal_transaksi) <= ?", [dateKeys[dateKeys.length - 1]]);
+      if (branchCode) qWeekly.where("t.kode_cabang", branchCode);
+      qWeekly.where(function () {
+        if (username) this.where("t.updated_by", username).orWhere("t.created_by", username);
+        if (userCode) this.orWhere("t.updated_by", userCode).orWhere("t.created_by", userCode);
+      });
+      qWeekly.groupByRaw("DATE(t.tanggal_transaksi)");
+      const weeklyRows = await qWeekly;
+      const mapVal = {};
+      for (const row of weeklyRows) {
+        const key = formatDateSystem(new Date(row.tgl), "yyyy-MM-dd");
+        mapVal[key] = parseFloat(row.total || 0) / 1000000;
+      }
+      const values = dateKeys.map((dk) => parseFloat((mapVal[dk] || 0).toFixed(2)));
+      kasirWeeklyTrend = { labels, values };
+
+      // Sesi shift aktif kasir jika ada
+      kasirActiveShift = await DB("trx_kasir_shift")
+        .where(function () {
+          if (userCode) this.where("user_code", userCode);
+          if (username) this.orWhere("created_by", username);
+        })
+        .where("status", "open")
+        .orderBy("id", "desc")
+        .first();
+    }
 
     // ── 5. METRIK WAREHOUSE ──
     const qStock = DB("mst_produk as p")
@@ -385,7 +468,9 @@ router.post("/role-data", async (req, res) => {
             total_bayar: parseFloat(totalTrxKasirToday?.total_bayar || 0),
             total_diskon: parseFloat(totalTrxKasirToday?.total_diskon || 0),
           },
-          metode_bayar: metodeBreakdown || [],
+          metode_bayar: role === "kasir" && kasirMetodeBreakdown.length > 0 ? kasirMetodeBreakdown : (metodeBreakdown || []),
+          weekly_trend: kasirWeeklyTrend,
+          active_shift: kasirActiveShift || null,
         },
         warehouse: {
           stock: stockList || [],

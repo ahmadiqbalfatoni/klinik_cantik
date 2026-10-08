@@ -17,8 +17,10 @@ import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import { ProgressSpinner } from 'primereact/progressspinner';
+import { TabView, TabPanel } from 'primereact/tabview';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 interface JadwalItem {
     id: number;
@@ -155,6 +157,29 @@ const JadwalKaryawanContent = () => {
         kuota: 10,
         status: 'aktif',
         is_penanggung_jawab: false,
+    });
+
+    // ── Main Tab State: Ruangan vs Kasir ──
+    const [mainTab, setMainTab] = useState<'ruangan' | 'kasir'>('ruangan');
+
+    // ── Jadwal Kasir State ──
+    const [kasirJadwalList, setKasirJadwalList] = useState<any[]>([]);
+    const [loadingKasirJadwal, setLoadingKasirJadwal] = useState<boolean>(false);
+    const [kasirSearch, setKasirSearch] = useState<string>('');
+    const [filterKasirHari, setFilterKasirHari] = useState<string>('');
+    const [filterKasirStaff, setFilterKasirStaff] = useState<string>('');
+    const [filterKasirStatus, setFilterKasirStatus] = useState<string>('');
+    const [kasirStaffOptions, setKasirStaffOptions] = useState<any[]>([]);
+    const [kasirDialogVisible, setKasirDialogVisible] = useState<boolean>(false);
+    const [isEditKasir, setIsEditKasir] = useState<boolean>(false);
+    const [savingKasir, setSavingKasir] = useState<boolean>(false);
+    const [kasirFormData, setKasirFormData] = useState<any>({
+        kode_jadwal: '',
+        no_sip: '',
+        hari: 'senin',
+        jam_mulai: '08:00',
+        jam_selesai: '15:00',
+        status: 'aktif',
     });
 
     // Sinkronkan selectedRuangan dengan query parameter URL
@@ -343,10 +368,151 @@ const JadwalKaryawanContent = () => {
         }
     };
 
+    const loadKasirJadwal = async () => {
+        setLoadingKasirJadwal(true);
+        try {
+            const res = await postData('/master/jadwal-karyawan-data', {
+                tipe: 'kasir',
+                page: 1,
+                perPage: 200,
+            });
+            setKasirJadwalList(res.data?.data || []);
+        } catch (err: any) {
+            showError(toast, err?.response?.data?.message || 'Gagal memuat jadwal kasir');
+        } finally {
+            setLoadingKasirJadwal(false);
+        }
+    };
+
+    const loadKasirStaffOptions = async () => {
+        try {
+            const res = await postData('/master/karyawan-data', { page: 1, perPage: 200 });
+            const list = (res.data?.data || [])
+                .filter((k: any) => (k.jabatan || '').toLowerCase() === 'kasir')
+                .map((k: any) => ({
+                    label: `${k.nama} (${k.kode_karyawan || k.kode_user || '-'})`,
+                    value: k.no_sip,
+                    nama: k.nama,
+                    email: k.email,
+                    no_hp: k.no_hp,
+                }));
+            setKasirStaffOptions(list);
+        } catch (err) {
+            console.error('Gagal memuat staf kasir:', err);
+        }
+    };
+
     useEffect(() => {
         loadRuangan();
         loadKaryawan();
+        loadKasirJadwal();
+        loadKasirStaffOptions();
     }, []);
+
+    const filteredKasirJadwals = useMemo(() => {
+        return kasirJadwalList.filter((item) => {
+            if (filterKasirHari && (item.hari || '').toLowerCase() !== filterKasirHari.toLowerCase()) return false;
+            if (filterKasirStaff && item.no_sip !== filterKasirStaff) return false;
+            if (filterKasirStatus && item.status !== filterKasirStatus) return false;
+            if (kasirSearch.trim()) {
+                const q = kasirSearch.toLowerCase().trim();
+                const matchKode = (item.kode_jadwal || '').toLowerCase().includes(q);
+                const matchNama = (item.nama_karyawan || '').toLowerCase().includes(q);
+                const matchHari = (item.hari || '').toLowerCase().includes(q);
+                if (!matchKode && !matchNama && !matchHari) return false;
+            }
+            return true;
+        });
+    }, [kasirJadwalList, filterKasirHari, filterKasirStaff, filterKasirStatus, kasirSearch]);
+
+    const handleOpenCreateKasir = () => {
+        setIsEditKasir(false);
+        setKasirFormData({
+            kode_jadwal: '',
+            no_sip: kasirStaffOptions.length > 0 ? kasirStaffOptions[0].value : '',
+            hari: filterKasirHari || 'senin',
+            jam_mulai: '08:00',
+            jam_selesai: '15:00',
+            status: 'aktif',
+        });
+        setKasirDialogVisible(true);
+    };
+
+    const handleOpenEditKasir = (item: any) => {
+        setIsEditKasir(true);
+        setKasirFormData({
+            kode_jadwal: item.kode_jadwal,
+            no_sip: item.no_sip,
+            hari: (item.hari || 'senin').toLowerCase(),
+            jam_mulai: (item.jam_mulai || '08:00').slice(0, 5),
+            jam_selesai: (item.jam_selesai || '15:00').slice(0, 5),
+            status: item.status || 'aktif',
+        });
+        setKasirDialogVisible(true);
+    };
+
+    const handleSaveKasirJadwal = async () => {
+        if (!kasirFormData.no_sip) {
+            showError(toast, 'Pilih karyawan kasir terlebih dahulu');
+            return;
+        }
+        if (!kasirFormData.hari) {
+            showError(toast, 'Pilih hari terlebih dahulu');
+            return;
+        }
+        if (!kasirFormData.jam_mulai || !kasirFormData.jam_selesai) {
+            showError(toast, 'Jam mulai dan jam selesai wajib diisi');
+            return;
+        }
+
+        setSavingKasir(true);
+        try {
+            const endpoint = isEditKasir ? '/master/jadwal-karyawan-update' : '/master/jadwal-karyawan-create';
+            const payload: any = {
+                no_sip: kasirFormData.no_sip,
+                kode_ruangan: null,
+                hari: kasirFormData.hari,
+                jam_mulai: kasirFormData.jam_mulai,
+                jam_selesai: kasirFormData.jam_selesai,
+                kuota: 0,
+                status: kasirFormData.status || 'aktif',
+                is_penanggung_jawab: 0,
+            };
+            if (isEditKasir) {
+                payload.kode_jadwal = kasirFormData.kode_jadwal;
+            }
+            const res = await postData(endpoint, payload);
+            showSuccess(toast, res.data?.message || 'Jadwal kasir berhasil disimpan');
+            setKasirDialogVisible(false);
+            loadKasirJadwal();
+        } catch (err: any) {
+            showError(toast, err?.response?.data?.message || 'Gagal menyimpan jadwal kasir');
+        } finally {
+            setSavingKasir(false);
+        }
+    };
+
+    const handleDeleteKasirJadwal = (item: any) => {
+        confirmDialog({
+            message: `Apakah Anda yakin ingin menghapus jadwal kasir ${item.nama_karyawan} (${item.hari?.toUpperCase()} ${(item.jam_mulai || '').slice(0, 5)} - ${(item.jam_selesai || '').slice(0, 5)})?`,
+            header: 'Konfirmasi Hapus Jadwal Kasir',
+            icon: 'pi pi-exclamation-triangle',
+            acceptClassName: 'p-button-danger',
+            acceptLabel: 'Ya, Hapus',
+            rejectLabel: 'Batal',
+            accept: async () => {
+                try {
+                    const res = await postData('/master/jadwal-karyawan-delete', {
+                        kode_jadwal: [item.kode_jadwal],
+                    });
+                    showSuccess(toast, res.data?.message || 'Jadwal kasir berhasil dihapus');
+                    loadKasirJadwal();
+                } catch (err: any) {
+                    showError(toast, err?.response?.data?.message || 'Gagal menghapus jadwal kasir');
+                }
+            },
+        });
+    };
 
     useEffect(() => {
         if (selectedRuangan) {
@@ -532,7 +698,24 @@ const JadwalKaryawanContent = () => {
             <Toast ref={toast} />
             <ConfirmDialog />
 
-            <div className="card border-round-xl p-4 shadow-1 surface-card mb-4">
+            <div className="card border-round-xl p-0 shadow-1 surface-card mb-4 overflow-hidden">
+                <TabView
+                    activeIndex={mainTab === 'ruangan' ? 0 : 1}
+                    onTabChange={(e) => {
+                        if (e.index === 0) {
+                            setMainTab('ruangan');
+                        } else {
+                            setMainTab('kasir');
+                            setSelectedRuangan('');
+                        }
+                    }}
+                >
+                    {/* ── TAB 1: JADWAL RUANGAN (DOKTER & TERAPIS) ── */}
+                    <TabPanel
+                        header="Jadwal Ruangan (Dokter & Terapis)"
+                        leftIcon="pi pi-building mr-2"
+                    >
+                        <div className="pt-2">
                 {/* ═══════════════════════════════════════════════════════════════ */}
                 {/* TAHAP 1: DAFTAR RUANGAN (CARD GRID)                         */}
                 {/* ═══════════════════════════════════════════════════════════════ */}
@@ -1118,20 +1301,7 @@ const JadwalKaryawanContent = () => {
                                             />
                                         </div>
                                     </div>
-                                    <div className="flex flex-wrap align-items-center gap-3 px-3 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                                        <span className="flex align-items-center gap-1">
-                                            <i className="pi pi-info-circle text-slate-500" />
-                                            <span className="font-semibold text-slate-700">KETERANGAN STATUS:</span>
-                                        </span>
-                                        <span className="flex align-items-center gap-1">
-                                            <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#22c55e', boxShadow: '0 1px 3px #22c55e55' }} />
-                                            Aktif
-                                        </span>
-                                        <span className="flex align-items-center gap-1">
-                                            <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#ef4444', boxShadow: '0 1px 3px #ef444455' }} />
-                                            Tidak Aktif
-                                        </span>
-                                    </div>
+                                    <KeteranganStatus className="mb-2" />
                                 </div>
                             }
                         >
@@ -1344,7 +1514,407 @@ const JadwalKaryawanContent = () => {
                         </DataTable>
                     </div>
                 )}
+                        </div>
+                    </TabPanel>
+
+                    {/* ═══════════════════════════════════════════════════════════════ */}
+                    {/* TAB 2: JADWAL KASIR                                          */}
+                    {/* ═══════════════════════════════════════════════════════════════ */}
+                    <TabPanel
+                        header={
+                            kasirJadwalList.length > 0 ? (
+                                <span className="flex align-items-center gap-2">
+                                    <span>Jadwal Kasir</span>
+                                    <span className="text-xs px-2 py-0.5 border-round-full bg-emerald-100 text-emerald-800 font-bold">
+                                        {kasirJadwalList.length}
+                                    </span>
+                                </span>
+                            ) : (
+                                'Jadwal Kasir'
+                            )
+                        }
+                        leftIcon="pi pi-calculator mr-2"
+                    >
+                        <div className="pt-2">
+                        {/* Page Header */}
+                        <div className="mb-4">
+                            <h3 className="text-2xl font-bold text-900 flex align-items-center gap-2 mb-1">
+                                <i className="pi pi-calculator text-emerald-600 text-2xl" />
+                                Kelola Jadwal Shift Kasir
+                            </h3>
+                            <p className="text-500 text-sm m-0">
+                                Atur jadwal shift kerja untuk karyawan kasir klinik (hari, jam mulai, dan jam selesai bertugas).
+                            </p>
+                        </div>
+
+                        {/* Top Summary Cards */}
+                        <div className="grid mb-3">
+                            <div className="col-12 sm:col-4">
+                                <div className="p-3 border-round-xl surface-50 border-1 surface-border flex align-items-center justify-content-between">
+                                    <div>
+                                        <div className="text-500 font-medium text-xs">Total Kasir Terdaftar</div>
+                                        <div className="text-900 font-bold text-lg mt-1">{kasirStaffOptions.length} Kasir</div>
+                                    </div>
+                                    <i className="pi pi-users text-teal-600 text-2xl" />
+                                </div>
+                            </div>
+                            <div className="col-12 sm:col-4">
+                                <div className="p-3 border-round-xl bg-green-50 border-1 border-green-200 flex align-items-center justify-content-between">
+                                    <div>
+                                        <div className="text-green-700 font-medium text-xs">Jadwal Shift Aktif</div>
+                                        <div className="text-green-900 font-bold text-lg mt-1">
+                                            {kasirJadwalList.filter((j) => j.status === 'aktif').length} Jadwal
+                                        </div>
+                                    </div>
+                                    <i className="pi pi-calendar text-green-600 text-2xl" />
+                                </div>
+                            </div>
+                            <div className="col-12 sm:col-4">
+                                <div className="p-3 border-round-xl bg-blue-50 border-1 border-blue-200 flex align-items-center justify-content-between">
+                                    <div>
+                                        <div className="text-blue-700 font-medium text-xs">Hari Operasional Terisi</div>
+                                        <div className="text-blue-900 font-bold text-lg mt-1">
+                                            {new Set(kasirJadwalList.map((j) => (j.hari || '').toLowerCase())).size} dari 7 Hari
+                                        </div>
+                                    </div>
+                                    <i className="pi pi-clock text-blue-600 text-2xl" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons Toolbar */}
+                        <div className="flex flex-row flex-wrap align-items-center gap-2 mb-4">
+                            <Button
+                                size="small"
+                                label="Tambah Jadwal Kasir"
+                                icon="pi pi-plus"
+                                severity="success"
+                                className="border-round-md font-medium px-3"
+                                onClick={handleOpenCreateKasir}
+                            />
+                            <Divider layout="vertical" className="m-0 h-2rem" />
+                            <Button
+                                size="small"
+                                label="Refresh"
+                                icon="pi pi-refresh"
+                                outlined
+                                severity="success"
+                                className="border-round-md font-medium px-3"
+                                loading={loadingKasirJadwal}
+                                onClick={loadKasirJadwal}
+                            />
+                        </div>
+
+                        {/* DataTable Jadwal Kasir */}
+                        <DataTable
+                            value={filteredKasirJadwals}
+                            loading={loadingKasirJadwal}
+                            paginator
+                            rows={10}
+                            rowsPerPageOptions={[10, 25, 50]}
+                            header={
+                                <div className="flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <span className="text-xl font-bold text-900">Daftar Jadwal Kasir</span>
+                                    <div className="flex flex-wrap align-items-center gap-2 ml-auto">
+                                        <Dropdown
+                                            value={filterKasirHari}
+                                            options={[{ label: 'Semua Hari', value: '' }, ...HARI_OPTIONS]}
+                                            onChange={(e) => setFilterKasirHari(e.value)}
+                                            placeholder="Filter Hari"
+                                            className="text-xs w-10rem"
+                                        />
+                                        <Dropdown
+                                            value={filterKasirStaff}
+                                            options={[{ label: 'Semua Kasir', value: '' }, ...kasirStaffOptions]}
+                                            onChange={(e) => setFilterKasirStaff(e.value)}
+                                            placeholder="Filter Kasir"
+                                            className="text-xs w-12rem"
+                                        />
+                                        <Dropdown
+                                            value={filterKasirStatus}
+                                            options={[
+                                                { label: 'Semua Status', value: '' },
+                                                { label: 'Aktif', value: 'aktif' },
+                                                { label: 'Nonaktif', value: 'nonaktif' },
+                                            ]}
+                                            onChange={(e) => setFilterKasirStatus(e.value)}
+                                            placeholder="Status"
+                                            className="text-xs w-9rem"
+                                        />
+                                        <IconField iconPosition="left" className="w-14rem">
+                                            <InputIcon className="pi pi-search" />
+                                            <InputText
+                                                value={kasirSearch}
+                                                onChange={(e) => setKasirSearch(e.target.value)}
+                                                placeholder="Cari Kasir..."
+                                                className="w-full text-xs"
+                                            />
+                                        </IconField>
+                                        <Button
+                                            type="button"
+                                            icon="pi pi-filter-slash"
+                                            outlined
+                                            severity="danger"
+                                            size="small"
+                                            tooltip="Reset Filter"
+                                            onClick={() => {
+                                                setKasirSearch('');
+                                                setFilterKasirHari('');
+                                                setFilterKasirStaff('');
+                                                setFilterKasirStatus('');
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            }
+                            emptyMessage="Belum ada data jadwal kasir yang tersimpan"
+                            rowHover
+                            className="text-sm"
+                            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                            currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data"
+                        >
+                            <Column
+                                field="hari"
+                                header="Hari"
+                                sortable
+                                style={{ minWidth: '9rem' }}
+                                body={(item) => {
+                                    const h = (item.hari || '').toLowerCase();
+                                    const cfg = HARI_CONFIG[h] || { label: h, bg: '#f1f5f9', color: '#475569' };
+                                    return (
+                                        <span
+                                            style={{ backgroundColor: cfg.bg, color: cfg.color }}
+                                            className="font-bold text-xs px-2.5 py-1 border-round-md uppercase tracking-wider inline-block"
+                                        >
+                                            {cfg.label}
+                                        </span>
+                                    );
+                                }}
+                            />
+                            <Column
+                                field="nama_karyawan"
+                                header="Nama Kasir"
+                                sortable
+                                style={{ minWidth: '14rem' }}
+                                body={(item) => (
+                                    <div className="flex align-items-center gap-2">
+                                        <div
+                                            className="w-2rem h-2rem border-round-circle flex align-items-center justify-content-center text-xs font-bold text-white shadow-1"
+                                            style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                                        >
+                                            {(item.nama_karyawan || 'K').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-900 text-sm">{item.nama_karyawan}</div>
+                                            <div className="text-500 text-xs">No SIP/ID: {item.no_sip || '-'}</div>
+                                        </div>
+                                    </div>
+                                )}
+                            />
+                            <Column
+                                header="Jam Kerja"
+                                style={{ minWidth: '13rem' }}
+                                body={(item) => {
+                                    const jM = (item.jam_mulai || '00:00').slice(0, 5);
+                                    const jS = (item.jam_selesai || '00:00').slice(0, 5);
+                                    const isPagi = jM < '12:00';
+                                    return (
+                                        <div className="flex align-items-center gap-2">
+                                            <span className="font-mono font-bold text-teal-800 text-sm">
+                                                {jM} - {jS} WIB
+                                            </span>
+                                            <Tag
+                                                severity={isPagi ? 'info' : 'warning'}
+                                                value={isPagi ? 'Shift Pagi' : 'Shift Siang'}
+                                                className="text-[10px] px-2 py-0.5"
+                                            />
+                                        </div>
+                                    );
+                                }}
+                            />
+                            <Column
+                                field="status"
+                                header="Status"
+                                align="center"
+                                sortable
+                                style={{ minWidth: '8rem' }}
+                                body={(item) => (
+                                    <Tag
+                                        severity={item.status === 'aktif' ? 'success' : 'danger'}
+                                        value={item.status === 'aktif' ? 'Aktif' : 'Nonaktif'}
+                                        className="text-xs px-2.5 py-1 font-semibold"
+                                    />
+                                )}
+                            />
+                            <Column
+                                header="Aksi"
+                                align="center"
+                                style={{ minWidth: '8rem' }}
+                                body={(item) => (
+                                    <div className="flex align-items-center justify-content-center gap-1">
+                                        <Button
+                                            icon="pi pi-pencil"
+                                            outlined
+                                            size="small"
+                                            severity="success"
+                                            className="p-button-sm border-round-md"
+                                            onClick={() => handleOpenEditKasir(item)}
+                                            tooltip="Edit Jadwal Kasir"
+                                            tooltipOptions={{ position: 'top' }}
+                                        />
+                                        <Button
+                                            icon="pi pi-trash"
+                                            outlined
+                                            size="small"
+                                            severity="danger"
+                                            className="p-button-sm border-round-md"
+                                            onClick={() => handleDeleteKasirJadwal(item)}
+                                            tooltip="Hapus Jadwal Kasir"
+                                            tooltipOptions={{ position: 'top' }}
+                                        />
+                                    </div>
+                                )}
+                            />
+                        </DataTable>
+                        </div>
+                    </TabPanel>
+                </TabView>
             </div>
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* DIALOG CREATE / EDIT JADWAL KASIR                            */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            <Dialog
+                header={
+                    <div className="flex align-items-center gap-2">
+                        <i className="pi pi-calendar text-emerald-600 text-xl" />
+                        <span className="font-bold text-lg text-900">
+                            {isEditKasir ? 'Edit Jadwal Kasir' : 'Tambah Jadwal Kasir Baru'}
+                        </span>
+                    </div>
+                }
+                visible={kasirDialogVisible}
+                style={{ width: '500px' }}
+                modal
+                onHide={() => setKasirDialogVisible(false)}
+            >
+                <div className="p-fluid flex flex-column gap-3 pt-2">
+                    {isEditKasir && (
+                        <div>
+                            <label className="block text-sm font-semibold mb-1">Kode Jadwal</label>
+                            <InputText value={kasirFormData.kode_jadwal} disabled className="w-full text-sm border-round-md bg-slate-50" />
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-sm font-semibold mb-1">
+                            Pilih Karyawan Kasir <span className="text-red-500">*</span>
+                        </label>
+                        <Dropdown
+                            value={kasirFormData.no_sip}
+                            options={kasirStaffOptions}
+                            onChange={(e) => setKasirFormData({ ...kasirFormData, no_sip: e.value })}
+                            placeholder="Pilih Staf Kasir..."
+                            className="w-full text-sm border-round-md"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold mb-1">
+                            Hari Kerja <span className="text-red-500">*</span>
+                        </label>
+                        <Dropdown
+                            value={kasirFormData.hari}
+                            options={HARI_OPTIONS}
+                            onChange={(e) => setKasirFormData({ ...kasirFormData, hari: e.value })}
+                            placeholder="Pilih Hari..."
+                            className="w-full text-sm border-round-md"
+                        />
+                    </div>
+
+                    {/* Template Preset Shift Cepat */}
+                    <div>
+                        <label className="block text-xs font-medium text-500 mb-1">Template Jam Shift Cepat:</label>
+                        <div className="flex flex-wrap gap-1">
+                            <Button
+                                type="button"
+                                label="Pagi (08:00 - 15:00)"
+                                outlined
+                                size="small"
+                                className="text-xs py-1 px-2 border-round-md"
+                                onClick={() => setKasirFormData({ ...kasirFormData, jam_mulai: '08:00', jam_selesai: '15:00' })}
+                            />
+                            <Button
+                                type="button"
+                                label="Siang (14:00 - 21:00)"
+                                outlined
+                                size="small"
+                                className="text-xs py-1 px-2 border-round-md"
+                                onClick={() => setKasirFormData({ ...kasirFormData, jam_mulai: '14:00', jam_selesai: '21:00' })}
+                            />
+                            <Button
+                                type="button"
+                                label="Full Day (08:00 - 17:00)"
+                                outlined
+                                size="small"
+                                className="text-xs py-1 px-2 border-round-md"
+                                onClick={() => setKasirFormData({ ...kasirFormData, jam_mulai: '08:00', jam_selesai: '17:00' })}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid formgrid">
+                        <div className="col-6">
+                            <label className="block text-sm font-semibold mb-1">
+                                Jam Mulai <span className="text-red-500">*</span>
+                            </label>
+                            <InputText
+                                type="time"
+                                value={kasirFormData.jam_mulai}
+                                onChange={(e) => setKasirFormData({ ...kasirFormData, jam_mulai: e.target.value })}
+                                className="w-full text-sm border-round-md"
+                            />
+                        </div>
+                        <div className="col-6">
+                            <label className="block text-sm font-semibold mb-1">
+                                Jam Selesai <span className="text-red-500">*</span>
+                            </label>
+                            <InputText
+                                type="time"
+                                value={kasirFormData.jam_selesai}
+                                onChange={(e) => setKasirFormData({ ...kasirFormData, jam_selesai: e.target.value })}
+                                className="w-full text-sm border-round-md"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex align-items-center justify-content-between p-3 border-round-lg surface-50 border-1 surface-border">
+                        <div>
+                            <span className="block font-semibold text-sm">Status Jadwal</span>
+                            <span className="text-xs text-500">
+                                {kasirFormData.status === 'aktif' ? 'Kasir dapat mengakses sistem pada jam ini.' : 'Jadwal nonaktif.'}
+                            </span>
+                        </div>
+                        <InputSwitch
+                            checked={kasirFormData.status === 'aktif'}
+                            onChange={(e) => setKasirFormData({ ...kasirFormData, status: e.value ? 'aktif' : 'nonaktif' })}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-content-end gap-2 mt-4 pt-3 border-top-1 surface-border">
+                    <Button label="Batal" outlined severity="secondary" onClick={() => setKasirDialogVisible(false)} size="small" />
+                    <Button
+                        label="Simpan Jadwal"
+                        icon="pi pi-check"
+                        severity="success"
+                        loading={savingKasir}
+                        onClick={handleSaveKasirJadwal}
+                        size="small"
+                        className="font-semibold"
+                    />
+                </div>
+            </Dialog>
 
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* DIALOG CREATE / EDIT JADWAL                                  */}

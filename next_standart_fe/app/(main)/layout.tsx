@@ -23,14 +23,12 @@ export const metadata: Metadata = {
 export default async function AppLayout({ children }: RootLayoutProps) {
 
   const h = await headers();
-  const rawPath = h.get("x-pathname") || "/";
-  const path = rawPath.replace(/\/$/, '') || '/';
+  const path = h.get("x-pathname") || "/";
 
-  if (path !== '/' && path !== '/dashboard') {
-    const access = await routeMiddleware(path);
-    if (access === "99") redirect("/auth/login");
-    if (access === "98") redirect("/auth/access");
-  }
+  const access = await routeMiddleware(path);
+
+  if (access === "99") redirect("/auth/login");
+  if (access === "98") redirect("/auth/access");
 
 
   return <ConfigProvider>

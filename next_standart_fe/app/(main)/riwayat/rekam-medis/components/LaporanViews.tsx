@@ -1640,7 +1640,7 @@ export const LaporanPasienView: React.FC = () => {
           paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
           currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data"
           emptyMessage="Data Laporan Pasien Tidak Ditemukan"
-          className="p-datatable-sm"
+          className="p-datatable-sm laporan-pasien-table"
           header={
             <LaporanTableHeaderFilter
               searchVal={keyword}
@@ -1707,18 +1707,18 @@ export const LaporanPasienView: React.FC = () => {
               />
             )}
           />
-          <Column field="no_rm" header="No. RM" sortable className="font-semibold text-800 font-mono" style={{ minWidth: '9rem' }} />
-          <Column field="nama" header="Nama Pasien" sortable className="font-semibold text-gray-800" style={{ minWidth: '13rem' }} />
-          <Column field="jenis_kelamin" header="Gender" body={(r) => (r.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan')} style={{ minWidth: '8rem' }} />
-          <Column field="no_hp" header="No. HP" style={{ minWidth: '10rem' }} />
-          <Column field="kota_kabupaten" header="Kota/Kab" body={(r) => r.kota_kabupaten || '-'} style={{ minWidth: '9rem' }} />
+          <Column field="no_rm" header="No. RM" sortable className="font-semibold text-800 font-mono" style={{ width: '8.5rem', minWidth: '8.5rem' }} />
+          <Column field="nama" header="Nama Pasien" sortable className="font-semibold text-gray-800" style={{ width: '13rem', minWidth: '13rem' }} />
+          <Column field="jenis_kelamin" header="Gender" body={(r) => (r.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan')} style={{ width: '7rem', minWidth: '7rem' }} />
+          <Column field="no_hp" header="No. HP" style={{ width: '9rem', minWidth: '9rem' }} />
+          <Column field="kota_kabupaten" header="Kota/Kab" body={(r) => r.kota_kabupaten || '-'} style={{ width: '11rem', minWidth: '11rem' }} />
           <Column
             field="total_kunjungan"
             header="Frekuensi Kunjungan"
             sortable
             align="center"
             body={(r) => <span className="font-bold text-blue-700">{r.total_kunjungan}x</span>}
-            style={{ minWidth: '10rem' }}
+            style={{ width: '10.5rem', minWidth: '10.5rem' }}
           />
           <Column
             field="total_transaksi"
@@ -1726,7 +1726,7 @@ export const LaporanPasienView: React.FC = () => {
             sortable
             align="right"
             body={(r) => <span className="font-semibold text-green-600">{formatRupiah(r.total_transaksi)}</span>}
-            style={{ minWidth: '11rem' }}
+            style={{ width: '11.5rem', minWidth: '11.5rem' }}
           />
         </DataTable>
       </div>
@@ -4360,13 +4360,15 @@ export const LaporanExpiredView: React.FC = () => {
       'Kode Produk': r.kode_produk,
       'Nama Obat/Skincare': r.nama_produk,
       'No. Batch': r.no_batch || '-',
-      'Tanggal Kadaluarsa': r.tanggal_kadaluarsa ? formatDateIndo(r.tanggal_kadaluarsa) : '-',
+      'Tanggal Kadaluarsa': r.tanggal_kadaluarsa
+        ? `${formatDateIndo(r.tanggal_kadaluarsa)}${r.is_legacy_estimate ? ' (⚠️ Perkiraan)' : ''}`
+        : '-',
       'Sisa Stok': `${r.stok_tersedia} ${r.satuan || ''}`,
       'Status Kadaluarsa':
         r.status_expired === 'kritis'
-          ? 'Kritis (<30 Hari)'
+          ? (r.sisa_hari !== null && r.sisa_hari <= 0 ? 'EXPIRED' : `Kritis (${r.sisa_hari ?? '<30'} Hari)`)
           : r.status_expired === 'perhatian'
-          ? 'Perhatian (<90 Hari)'
+          ? `Perhatian (${r.sisa_hari ?? '<90'} Hari)`
           : r.status_expired === 'aman'
           ? 'Aman'
           : 'Belum Diisi',
@@ -4387,7 +4389,7 @@ export const LaporanExpiredView: React.FC = () => {
           <td style="text-align: center; font-family: monospace;">${r.kode_produk}</td>
           <td><strong>${r.nama_produk}</strong></td>
           <td style="text-align: center;">${r.no_batch || '-'}</td>
-          <td style="text-align: center;">${r.tanggal_kadaluarsa ? formatDateIndo(r.tanggal_kadaluarsa) : '-'}</td>
+          <td style="text-align: center;">${r.tanggal_kadaluarsa ? formatDateIndo(r.tanggal_kadaluarsa) : '-'}${r.is_legacy_estimate ? ' <span style="color:#d97706;font-size:11px;">(Perkiraan)</span>' : ''}</td>
           <td style="text-align: center;">${r.stok_tersedia} ${r.satuan || ''}</td>
           <td style="text-align: center; font-weight: bold;">${String(r.status_expired || '-').toUpperCase()}</td>
         </tr>
@@ -4398,30 +4400,12 @@ export const LaporanExpiredView: React.FC = () => {
   };
 
   const summaryCards: SummaryCardItem[] = [
-    { label: 'Total Produk Dipantau', value: `${summary.total_produk || data.length} Produk`, icon: 'pi pi-box', color: 'blue' },
-    { label: 'Kritis (<30 Hari)', value: `${summary.kritis} Produk`, icon: 'pi pi-exclamation-circle', color: 'red' },
-    { label: 'Perhatian (<90 Hari)', value: `${summary.perhatian} Produk`, icon: 'pi pi-clock', color: 'amber' },
-    { label: 'Stok Aman', value: `${summary.aman} Produk`, icon: 'pi pi-shield', color: 'green' },
+    { label: 'Total Batch Dipantau', value: `${summary.total_produk || data.length} Batch`, icon: 'pi pi-box', color: 'blue' },
+    { label: 'Kritis (<30 Hari)', value: `${summary.kritis} Batch`, icon: 'pi pi-exclamation-circle', color: 'red' },
+    { label: 'Perhatian (<90 Hari)', value: `${summary.perhatian} Batch`, icon: 'pi pi-clock', color: 'amber' },
+    { label: 'Stok Aman', value: `${summary.aman} Batch`, icon: 'pi pi-shield', color: 'green' },
   ];
 
-  const renderStatusTag = (r: any) => {
-    switch (r.status_expired) {
-      case 'kritis':
-        return (
-          <Tag
-            value={r.sisa_hari !== null && r.sisa_hari <= 0 ? 'EXPIRED' : `KRITIS (${r.sisa_hari ?? '<30'} HARI)`}
-            severity="danger"
-            className="text-xs font-bold"
-          />
-        );
-      case 'perhatian':
-        return <Tag value={`PERHATIAN (${r.sisa_hari ?? '<90'} HARI)`} severity="warning" className="text-xs font-semibold" />;
-      case 'aman':
-        return <Tag value="AMAN" severity="success" className="text-xs" />;
-      default:
-        return <Tag value="BELUM DIISI" severity="secondary" className="text-xs" />;
-    }
-  };
 
   return (
     <>
@@ -4429,7 +4413,7 @@ export const LaporanExpiredView: React.FC = () => {
       <LaporanHeader
         icon="pi pi-calendar-times"
         title="Laporan Kadaluarsa (Expired) Produk & Skincare"
-        subtitle="Monitoring masa simpan batch obat, krim racikan, dan produk skincare untuk mencegah penggunaan produk kadaluarsa."
+        subtitle="Monitoring masa simpan seluruh batch obat, krim racikan, dan produk skincare untuk mencegah penggunaan produk kadaluarsa secara FEFO."
       />
       <LaporanSummaryCards items={summaryCards} />
       <div className="card">
@@ -4529,24 +4513,47 @@ export const LaporanExpiredView: React.FC = () => {
             field="no_batch"
             header="No. Batch"
             sortable
-            body={(r) => r.no_batch ? <span className="font-mono text-gray-700 font-semibold">{r.no_batch}</span> : <span className="text-gray-400 italic text-xs">-</span>}
-            style={{ minWidth: '10rem' }}
+            body={(r) => (
+              <div>
+                {r.no_batch ? (
+                  <span className="font-mono text-gray-700 font-semibold">{r.no_batch}</span>
+                ) : (
+                  <span className="text-gray-400 italic text-xs">-</span>
+                )}
+                {r.nama_supplier && (
+                  <div className="text-xs text-500">{r.nama_supplier}</div>
+                )}
+              </div>
+            )}
+            style={{ minWidth: '11rem' }}
           />
           <Column
             field="tanggal_kadaluarsa"
             header="Tanggal Kadaluarsa"
             sortable
-            body={(r) => r.tanggal_kadaluarsa ? formatDateIndo(r.tanggal_kadaluarsa) : <span className="text-gray-400 italic text-xs">-</span>}
-            style={{ minWidth: '12rem' }}
+            body={(r) => (
+              <div className="flex flex-column gap-1">
+                <span>{r.tanggal_kadaluarsa ? formatDateIndo(r.tanggal_kadaluarsa) : <span className="text-gray-400 italic text-xs">-</span>}</span>
+                {Boolean(r.is_legacy_estimate) && (
+                  <Tag
+                    value="⚠️ Perkiraan — Verifikasi"
+                    severity="warning"
+                    className="text-[10px] py-0 px-1 border-round w-max"
+                  />
+                )}
+              </div>
+            )}
+            style={{ minWidth: '13rem' }}
           />
           <Column
             field="stok_tersedia"
-            header="Sisa Stok"
+            header="Sisa Stok Batch"
             sortable
             align="center"
             body={(r) => <span className="font-bold text-gray-700">{r.stok_tersedia} {r.satuan || ''}</span>}
-            style={{ minWidth: '8rem' }}
+            style={{ minWidth: '9rem' }}
           />
+
         </DataTable>
       </div>
     </>

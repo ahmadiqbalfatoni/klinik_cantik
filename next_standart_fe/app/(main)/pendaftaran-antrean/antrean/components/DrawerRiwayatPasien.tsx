@@ -14,6 +14,7 @@ import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import postData from '@/lib/axios/postData';
 import { showError } from '@/lib/tools/generalTools';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 import {
     ArrowLeft,
     Clock,
@@ -88,7 +89,7 @@ const getFullImageUrl = (url?: string) => {
         return url;
     }
     const clean = url.startsWith('/') ? url : `/${url}`;
-    return clean;
+    return `http://127.0.0.1:8000${clean}`;
 };
 
 export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
@@ -115,6 +116,7 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
     const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
     const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string>('');
     const [previewPhotoTitle, setPreviewPhotoTitle] = useState<string>('');
+
 
     useEffect(() => {
         if (visible && noRm) {
@@ -183,6 +185,57 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
         } catch (_) {
             return dateStr;
         }
+    };
+
+    const formatDateSimple = (dateStr?: string) => {
+        if (!dateStr) return '-';
+        try {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+            });
+        } catch (_) {
+            return dateStr;
+        }
+    };
+
+    const calculateAge = (birthDateStr?: string) => {
+        if (!birthDateStr) return '';
+        try {
+            const birth = new Date(birthDateStr);
+            const now = new Date();
+            let age = now.getFullYear() - birth.getFullYear();
+            const m = now.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+                age--;
+            }
+            return age > 0 ? ` (${age} Thn)` : '';
+        } catch (_) {
+            return '';
+        }
+    };
+
+    const formatFullAddress = (item: any) => {
+        if (!item) return '-';
+        const parts = [
+            item.patokan,
+            item.kelurahan_desa ? `Kel. ${item.kelurahan_desa}` : '',
+            item.kecamatan ? `Kec. ${item.kecamatan}` : '',
+            item.kota_kabupaten,
+            item.provinsi,
+            item.kode_pos,
+        ].filter(Boolean);
+        return parts.length > 0 ? parts.join(', ') : '-';
+    };
+
+    const formatGender = (g?: string) => {
+        if (!g) return '-';
+        const up = g.toUpperCase();
+        if (up === 'L' || up === 'LAKI-LAKI' || up === 'PRIA') return 'Laki-Laki';
+        if (up === 'P' || up === 'PEREMPUAN' || up === 'WANITA') return 'Perempuan';
+        return g;
     };
 
     const openPhotoZoom = (url: string, title: string) => {
@@ -287,44 +340,84 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
 
     // ==========================================
     // RENDER DETAIL VIEW FOR SELECTED VISIT
+    // (Mengikuti layout Cetak RME agar rapi & terstruktur, tanpa tombol cetak)
     // ==========================================
     const renderDetailView = () => {
         if (!selectedVisit) return null;
 
-        const origIdx = riwayatList.findIndex(
-            (k) => k.kode_kunjungan === selectedVisit.kode_kunjungan
-        );
-        const visitNumber = riwayatList.length - (origIdx !== -1 ? origIdx : 0);
         const headerRM = selectedVisit.header_rekam_medis || {};
         const layananList = selectedVisit.layanan || [];
         const isSelesai = selectedVisit.status_kunjungan === 'selesai';
+        const resolvedPatientName = selectedVisit.nama_pasien || namaPasien || '-';
+        const patientNoRm = selectedVisit.no_rm || noRm || '-';
 
-        // Cek foto before awal
-        let beforeFotoUrl = headerRM.foto_before || '';
-        if (!beforeFotoUrl && layananList.length > 0) {
+        // Extract vital signs and structured form entries
+        const formFieldsCombined: { label: string; value: any }[] = [];
+        layananList.forEach((lay: any) => {
+            const formItems = lay.rekam_medis?.formatted_data_form || [];
+            formItems.forEach((f: any) => {
+                if (f.label && f.value !== undefined && f.value !== null && String(f.value).trim() !== '' && String(f.value).trim() !== '-') {
+                    formFieldsCombined.push({
+                        label: f.label,
+                        value: f.value,
+                    });
+                }
+            });
+        });
+
+        // Resolve doctor name
+        let resolvedDokterName = headerRM.dokter_nama || selectedVisit.dokter_nama;
+        if (!resolvedDokterName && layananList.length > 0) {
             for (const lay of layananList) {
-                const foundBefore = (lay.rekam_medis?.fotos || []).find(
-                    (f: any) => f.tipe === 'before' || f.tipe === 'foto_before'
-                );
-                if (foundBefore?.url_foto) {
-                    beforeFotoUrl = foundBefore.url_foto;
+                if (lay.petugas?.nama) {
+                    resolvedDokterName = lay.petugas.nama;
+                    break;
+                }
+                if (Array.isArray(lay.daftar_petugas)) {
+                    const pj = lay.daftar_petugas.find((p: any) => p.is_dokter_pj || p.role === 'DOKTER');
+                    if (pj?.nama) {
+                        resolvedDokterName = pj.nama;
+                        break;
+                    }
+                }
+                if (lay.rekam_medis?.dokter_penanggung_jawab?.nama) {
+                    resolvedDokterName = lay.rekam_medis.dokter_penanggung_jawab.nama;
                     break;
                 }
             }
         }
+        const dokterName = resolvedDokterName || 'dr. Penanggung Jawab';
+        const dokterFormatted = dokterName.toLowerCase().startsWith('dr.') || dokterName.includes(',')
+            ? dokterName
+            : `dr. ${dokterName}`;
 
-        const hasAllergy =
-            headerRM.riwayat_alergi &&
-            headerRM.riwayat_alergi.trim() !== '' &&
-            headerRM.riwayat_alergi.trim() !== '-' &&
-            headerRM.riwayat_alergi.toLowerCase() !== 'tidak ada';
+        // Collect all visit photos (header before photo + layanans fotos)
+        const allVisitFotos: { url: string; label: string }[] = [];
+        if (headerRM.foto_before) {
+            allVisitFotos.push({
+                url: headerRM.foto_before,
+                label: 'Kondisi Awal (Sebelum Treatment)',
+            });
+        }
+        layananList.forEach((lay: any) => {
+            const fotos = lay.rekam_medis?.fotos || [];
+            fotos.forEach((foto: any) => {
+                const isBefore = foto.tipe === 'before' || foto.tipe === 'foto_before';
+                const isAfter = foto.tipe === 'after' || foto.tipe === 'foto_after';
+                const badgeLabel = isBefore ? 'BEFORE' : isAfter ? 'AFTER' : String(foto.tipe || 'FOTO').toUpperCase();
+                allVisitFotos.push({
+                    url: foto.url_foto,
+                    label: `${badgeLabel} — ${lay.nama_layanan || 'Treatment'}`,
+                });
+            });
+        });
 
         return (
             <div
                 className="flex flex-column gap-3 animate-fadein"
                 style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}
             >
-                {/* ── TOP BAR: Back + Status Visit ── */}
+                {/* ── TOP BAR: Back + Status Visit (TANPA TOMBOL CETAK) ── */}
                 <div className="flex align-items-center justify-content-between pb-3 border-bottom-1 surface-border flex-wrap gap-2">
                     <Button
                         type="button"
@@ -337,46 +430,34 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                         onClick={() => setSelectedVisit(null)}
                     />
                     <div className="flex align-items-center gap-2 flex-wrap">
-                        <Button
-                            label="Cetak RME"
-                            icon={<IconMedicalRecord size={15} style={{ marginRight: '8px' }} />}
-                            size="small"
-                            className="text-xs font-bold py-1.5 px-3 border-round-lg bg-teal-600 text-white border-none hover:bg-teal-700 shadow-1 transition-all"
-                            onClick={() => {
-                                setVisitToPrint(selectedVisit);
-                                setPrintModalVisible(true);
-                            }}
-                        />
                         <span
-                            className="text-[11px] font-bold text-slate-700 bg-slate-100 border-round-md border-1 surface-border inline-flex align-items-center justify-content-center"
-                            style={{ height: '24px', padding: '0 10px', borderRadius: '6px', lineHeight: 1, letterSpacing: '0.025em' }}
+                            className="text-xs font-mono font-bold text-slate-700 bg-slate-100 border-round-md border-1 surface-border inline-flex align-items-center justify-content-center"
+                            style={{ height: '26px', padding: '0 10px', borderRadius: '6px', lineHeight: 1 }}
                         >
                             {selectedVisit.kode_kunjungan}
                         </span>
                         {isSelesai ? (
                             <span
-                                className="text-[11px] font-bold text-teal-700 bg-teal-50 border-1 border-teal-200 inline-flex align-items-center justify-content-center flex-shrink-0 uppercase"
+                                className="text-xs font-bold text-teal-700 bg-teal-50 border-1 border-teal-200 inline-flex align-items-center justify-content-center flex-shrink-0 uppercase"
                                 style={{
-                                    height: '24px',
+                                    height: '26px',
                                     padding: '0 10px',
                                     borderRadius: '6px',
                                     whiteSpace: 'nowrap',
                                     lineHeight: 1,
-                                    letterSpacing: '0.025em',
                                 }}
                             >
                                 Selesai
                             </span>
                         ) : (
                             <span
-                                className="text-[11px] font-bold text-blue-700 bg-blue-50 border-1 border-blue-200 inline-flex align-items-center justify-content-center flex-shrink-0 uppercase"
+                                className="text-xs font-bold text-blue-700 bg-blue-50 border-1 border-blue-200 inline-flex align-items-center justify-content-center flex-shrink-0 uppercase"
                                 style={{
-                                    height: '24px',
+                                    height: '26px',
                                     padding: '0 10px',
                                     borderRadius: '6px',
                                     whiteSpace: 'nowrap',
                                     lineHeight: 1,
-                                    letterSpacing: '0.025em',
                                 }}
                             >
                                 Sedang Berlangsung
@@ -385,973 +466,503 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                     </div>
                 </div>
 
-                {/* ── VISIT INFO CARD ── */}
-                <div className="p-3 surface-50 border-round-xl border-1 surface-border shadow-none">
-                    <div className="grid formgrid -m-1.5 align-items-center">
-                        <div className="col-12 md:col-8 p-1.5">
-                            <div className="bg-white border-round-lg border-1 surface-border p-3 h-full flex align-items-center" style={{ gap: '14px' }}>
-                                <div
-                                    className="text-white border-round-lg text-center flex-shrink-0 flex flex-column justify-content-center"
-                                    style={{ backgroundColor: '#0f766e', minWidth: '64px', padding: '8px 12px', borderRadius: '8px' }}
-                                >
-                                    <span className="font-bold text-[9px] uppercase tracking-wider block" style={{ opacity: 0.9 }}>
-                                        VISIT
-                                    </span>
-                                    <span className="text-xl font-black block line-height-1 mt-1">
-                                        #{visitNumber}
-                                    </span>
-                                </div>
-                                <div className="min-w-0">
-                                    <h3 className="text-sm md:text-base font-bold text-900 m-0 mb-1.5 truncate">
-                                        {formatDateIndo(selectedVisit.tanggal_kunjungan)}
-                                    </h3>
-                                    <div className="flex align-items-center flex-wrap text-xs text-slate-500" style={{ gap: '12px' }}>
-                                        <span className="flex align-items-center font-medium">
-                                            <Clock size={14} className="text-teal-600 flex-shrink-0" style={{ marginRight: '6px' }} />
-                                            {selectedVisit.jam_datang || '-'} WIB
-                                        </span>
-                                        <span>•</span>
-                                        <span className="flex align-items-center font-medium">
-                                            <ClipboardList size={14} className="text-teal-600 flex-shrink-0" style={{ marginRight: '6px' }} />
-                                            {layananList.length} Sesi Layanan
-                                        </span>
-                                    </div>
-                                </div>
+                {/* ── DOKUMEN REKAM MEDIS ELEKTRONIK (DESAIN RAPI MENGIKUTI CETAK RME) ── */}
+                <div className="bg-white border-1 surface-border border-round-xl shadow-1 p-3 md:p-5 rme-detail-document">
+                    <style>{`
+                        .rme-table-info {
+                            width: 100%;
+                            border-collapse: collapse;
+                        }
+                        .rme-table-info tr {
+                            border-bottom: 1px dashed #f1f5f9;
+                        }
+                        .rme-table-info tr:last-child {
+                            border-bottom: none;
+                        }
+                        .rme-table-info td {
+                            padding: 4px 6px;
+                            vertical-align: top;
+                            font-size: 11px;
+                            line-height: 1.4;
+                        }
+                        .rme-table-info td.rme-label {
+                            width: 125px;
+                            color: #475569;
+                            font-weight: 500;
+                            white-space: nowrap;
+                        }
+                        .rme-table-info td.rme-colon {
+                            width: 12px;
+                            text-align: center;
+                            color: #64748b;
+                            font-weight: 600;
+                            padding-left: 0;
+                            padding-right: 0;
+                        }
+                        .rme-table-info td.rme-value {
+                            color: #0f172a;
+                            font-weight: 700;
+                        }
+                        .rme-section-header {
+                            background-color: #f8fafc;
+                            border-left: 3px solid #0f766e;
+                            border-bottom: 1px solid #e2e8f0;
+                            padding: 5px 8px;
+                            font-weight: 700;
+                            font-size: 11px;
+                            text-transform: uppercase;
+                            letter-spacing: 0.4px;
+                            color: #0f172a;
+                            margin-top: 8px;
+                            margin-bottom: 5px;
+                            border-radius: 0 4px 4px 0;
+                        }
+                        .rme-border-box {
+                            border: 1px solid #cbd5e1;
+                            border-radius: 6px;
+                            padding: 8px 10px;
+                            background-color: #ffffff;
+                        }
+                        .rme-data-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            border: 1px solid #cbd5e1;
+                            margin-top: 6px;
+                        }
+                        .rme-data-table th {
+                            background-color: #f1f5f9;
+                            border: 1px solid #cbd5e1;
+                            padding: 7px 10px;
+                            font-size: 11px;
+                            font-weight: 700;
+                            text-transform: uppercase;
+                            letter-spacing: 0.3px;
+                            color: #0f172a;
+                            vertical-align: middle;
+                        }
+                        .rme-data-table td {
+                            border: 1px solid #cbd5e1;
+                            padding: 7px 10px;
+                            font-size: 11.5px;
+                            vertical-align: top;
+                            line-height: 1.4;
+                            color: #0f172a;
+                        }
+                        .rme-skin-grid {
+                            display: grid;
+                            grid-template-columns: repeat(5, 1fr);
+                            gap: 6px;
+                            margin-bottom: 4px;
+                        }
+                        .rme-skin-card {
+                            border: 1px solid #cbd5e1;
+                            border-radius: 4px;
+                            background-color: #f8fafc;
+                            padding: 6px 4px;
+                            text-align: center;
+                            min-height: 42px;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            box-sizing: border-box;
+                        }
+                        .rme-skin-card .rme-skin-label {
+                            font-size: 9px;
+                            color: #64748b;
+                            font-weight: 600;
+                            text-transform: uppercase;
+                            line-height: 1;
+                            letter-spacing: 0.2px;
+                        }
+                        .rme-skin-card .rme-skin-value {
+                            font-size: 11px;
+                            color: #0f172a;
+                            font-weight: 700;
+                            margin-top: 3px;
+                            line-height: 1.2;
+                            word-break: break-word;
+                        }
+                    `}</style>
+
+                    {/* 2. JUDUL DOKUMEN */}
+                    <div className="text-center my-2">
+                        <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 800, textDecoration: 'underline', letterSpacing: '0.5px', color: '#0f172a' }}>
+                            LAPORAN DATA REKAM MEDIS PASIEN
+                        </h2>
+                    </div>
+
+                    {/* 3. INFORMASI KUNJUNGAN & IDENTITAS PASIEN (2 KOLOM SEJAJAR) */}
+                    <div className="grid formgrid mb-1" style={{ margin: '0 -4px' }}>
+                        {/* Kolom Kiri: Informasi Kunjungan */}
+                        <div className="col-12 md:col-6 p-1">
+                            <div className="rme-section-header" style={{ marginTop: 0 }}>
+                                Informasi Kunjungan
+                            </div>
+                            <div className="rme-border-box h-full">
+                                <table className="rme-table-info">
+                                    <tbody>
+                                        <tr>
+                                            <td className="rme-label">Tanggal Kunjungan</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{formatDateIndo(selectedVisit.tanggal_kunjungan)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">No. Kunjungan</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value font-mono text-teal-800">{selectedVisit.kode_kunjungan || '-'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Jaminan / Penjamin</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">Umum / Mandiri</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Nama Poli / Ruangan</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{layananList[0]?.nama_ruangan || 'Ruang Konsultasi & Treatment'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Dokter Pemeriksa</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{dokterFormatted}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Waktu Pemeriksaan</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">
+                                                {formatShortDate(selectedVisit.tanggal_kunjungan)}{' '}
+                                                {selectedVisit.jam_datang ? `(${selectedVisit.jam_datang} WIB)` : ''}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                        <div className="col-12 md:col-4 p-1.5">
-                            {headerRM.dokter_nama ? (
-                                <div className="bg-white border-round-lg border-1 surface-border p-3 h-full flex align-items-center" style={{ gap: '12px' }}>
-                                    <div
-                                        className="flex align-items-center justify-content-center flex-shrink-0 font-bold"
-                                        style={{ width: '34px', height: '34px', borderRadius: '50%', backgroundColor: '#ccfbf1', color: '#0f766e' }}
-                                    >
-                                        <User size={16} />
+
+                        {/* Kolom Kanan: Identitas Pasien */}
+                        <div className="col-12 md:col-6 p-1">
+                            <div className="rme-section-header" style={{ marginTop: 0 }}>
+                                Identitas Pasien
+                            </div>
+                            <div className="rme-border-box h-full">
+                                <table className="rme-table-info">
+                                    <tbody>
+                                        <tr>
+                                            <td className="rme-label">No. Rekam Medis</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value font-mono text-teal-800">{patientNoRm}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">NIK / Identitas</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value font-mono">{selectedVisit.nik || '-'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Nama Pasien</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{resolvedPatientName}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Jenis Kelamin / Usia</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">
+                                                {formatGender(selectedVisit.jenis_kelamin)}
+                                                {calculateAge(selectedVisit.tanggal_lahir)}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Alamat</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{formatFullAddress(selectedVisit)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">No. HP / WA</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{selectedVisit.no_hp || '-'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Alergi Obat / Zat</td>
+                                            <td className="rme-colon">:</td>
+                                            <td
+                                                className="rme-value"
+                                                style={{
+                                                    color: (selectedVisit.alergi || headerRM.riwayat_alergi) ? '#b91c1c' : '#475569',
+                                                    fontWeight: (selectedVisit.alergi || headerRM.riwayat_alergi) ? 800 : 600,
+                                                }}
+                                            >
+                                                {selectedVisit.alergi || headerRM.riwayat_alergi || 'Tidak Ada Riwayat Alergi'}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 4. SUBJEKTIF & OBJEKTIF (2 KOLOM SEJAJAR SIDE-BY-SIDE) */}
+                    <div className="grid formgrid mb-1" style={{ margin: '0 -4px' }}>
+                        {/* Kolom Kiri: I. SUBJEKTIF */}
+                        <div className="col-12 md:col-6 p-1">
+                            <div className="rme-section-header">
+                                I. Subjektif (Anamnesis &amp; Keluhan)
+                            </div>
+                            <div className="rme-border-box h-full" style={{ minHeight: '90px' }}>
+                                <table className="rme-table-info">
+                                    <tbody>
+                                        <tr>
+                                            <td className="rme-label">Keluhan Utama</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">
+                                                {headerRM.keluhan || headerRM.subjective || selectedVisit.catatan_pasien || '-'}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Durasi Keluhan</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{headerRM.durasi_keluhan || '-'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Riwayat Treatment</td>
+                                            <td className="rme-colon">:</td>
+                                            <td className="rme-value">{headerRM.riwayat_treatment || '-'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="rme-label">Riwayat Alergi</td>
+                                            <td className="rme-colon">:</td>
+                                            <td
+                                                className="rme-value"
+                                                style={{
+                                                    color: headerRM.riwayat_alergi ? '#b91c1c' : '#475569',
+                                                    fontWeight: headerRM.riwayat_alergi ? 800 : 600,
+                                                }}
+                                            >
+                                                {headerRM.riwayat_alergi || selectedVisit.alergi || 'Tidak Ada'}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Kolom Kanan: II. OBJEKTIF */}
+                        <div className="col-12 md:col-6 p-1">
+                            <div className="rme-section-header">
+                                II. Objektif (Pemeriksaan &amp; Kulit)
+                            </div>
+                            <div className="rme-border-box h-full" style={{ minHeight: '90px' }}>
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                                    Karakteristik Kulit Pasien:
+                                </div>
+                                <div className="rme-skin-grid">
+                                    <div className="rme-skin-card">
+                                        <span className="rme-skin-label">Tipe</span>
+                                        <strong className="rme-skin-value">{headerRM.pemeriksaan_skin_type || 'Normal'}</strong>
                                     </div>
-                                    <div className="overflow-hidden min-w-0">
-                                        <span
-                                            className="block text-slate-500 font-bold uppercase text-[10px] mb-1.5"
-                                            style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                        >
-                                            Dokter Penanggung Jawab
-                                        </span>
-                                        <span className="font-semibold text-slate-900 text-xs block truncate" style={{ lineHeight: 1.3 }}>
-                                            dr. {headerRM.dokter_nama.replace(/^dr\.\s*/i, '')}
-                                        </span>
-                                        {headerRM.no_sip && (
-                                            <span className="text-slate-500 block text-[10.5px] mt-0.5 truncate" style={{ lineHeight: 1.2, fontWeight: 500 }}>
-                                                SIP: {headerRM.no_sip}
-                                            </span>
-                                        )}
+                                    <div className="rme-skin-card">
+                                        <span className="rme-skin-label">Inflamasi</span>
+                                        <strong className="rme-skin-value">{headerRM.pemeriksaan_inflammation || 'Tidak Ada'}</strong>
+                                    </div>
+                                    <div className="rme-skin-card">
+                                        <span className="rme-skin-label">Acne</span>
+                                        <strong className="rme-skin-value">{headerRM.pemeriksaan_acne || 'Tidak Ada'}</strong>
+                                    </div>
+                                    <div className="rme-skin-card">
+                                        <span className="rme-skin-label">Pigmentasi</span>
+                                        <strong className="rme-skin-value">{headerRM.pemeriksaan_pigmentation || 'Normal'}</strong>
+                                    </div>
+                                    <div className="rme-skin-card">
+                                        <span className="rme-skin-label">Sensitivitas</span>
+                                        <strong className="rme-skin-value">{headerRM.pemeriksaan_sensitivity || 'Normal'}</strong>
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="bg-white border-round-lg border-1 surface-border p-3 h-full flex align-items-center text-slate-400 text-xs italic" style={{ gap: '8px' }}>
-                                    <User size={16} className="text-slate-400 flex-shrink-0" />
-                                    <span>Dokter belum ditentukan</span>
+
+                                {headerRM.objective && (
+                                    <div className="mt-2 pt-2 border-top-1 surface-border" style={{ fontSize: '11px', lineHeight: 1.4 }}>
+                                        <span style={{ color: '#475569', fontWeight: 600 }}>Temuan Fisik: </span>
+                                        <span style={{ color: '#0f172a', fontWeight: 700 }}>{headerRM.objective}</span>
+                                    </div>
+                                )}
+
+                                {formFieldsCombined.length > 0 && (
+                                    <div className="mt-2 pt-2 border-top-1 surface-border">
+                                        <div style={{ fontSize: '10px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                                            Parameter Form Ruangan:
+                                        </div>
+                                        <div className="grid" style={{ margin: '0 -3px' }}>
+                                            {formFieldsCombined.map((f, fIdx) => (
+                                                <div key={fIdx} className="col-6 sm:col-4 p-1" style={{ fontSize: '10.5px' }}>
+                                                    <span style={{ color: '#475569', fontWeight: 500 }}>{f.label}: </span>
+                                                    <strong style={{ color: '#0f172a', fontWeight: 700 }}>{String(f.value)}</strong>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 5. ASSESSMENT (DIAGNOSIS) & PLANNING (TINDAKAN) */}
+                    <div className="rme-section-header">
+                        III. Assessment &amp; Penatalaksanaan Tindakan (Planning)
+                    </div>
+                    <div className="rme-border-box mb-1">
+                        {/* Diagnosis & Plan note in compact row */}
+                        <div className="flex flex-wrap gap-3 justify-content-between align-items-center mb-2 pb-2 border-bottom-1 surface-border" style={{ fontSize: '11px' }}>
+                            <div>
+                                <span style={{ color: '#475569', fontWeight: 500 }}>Diagnosis Utama:</span>{' '}
+                                <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '11.5px' }}>
+                                    {headerRM.diagnosis || selectedVisit.diagnosis || '-'}
+                                </strong>
+                                {headerRM.assessment && (
+                                    <span style={{ color: '#475569', marginLeft: '8px', fontWeight: 500 }}>
+                                        ({headerRM.assessment})
+                                    </span>
+                                )}
+                            </div>
+                            {headerRM.plan && (
+                                <div style={{ fontSize: '11px', color: '#334155' }}>
+                                    <span style={{ color: '#475569', fontWeight: 500 }}>Anjuran / Terapi:</span>{' '}
+                                    <strong style={{ color: '#0f172a', fontWeight: 700 }}>{headerRM.plan}</strong>
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
 
-                {/* ── ALLERGY ALERT (Aksen Medis: Soft Rose) ── */}
-                {hasAllergy && (
-                    <div
-                        className="p-3 border-round-xl border-1 flex align-items-center"
-                        style={{
-                            backgroundColor: '#fff1f2',
-                            borderColor: '#fecdd3',
-                            borderLeft: '4px solid #e11d48',
-                            gap: '12px',
-                        }}
-                    >
-                        <AlertTriangle size={18} style={{ color: '#e11d48' }} className="flex-shrink-0" />
-                        <div className="flex flex-column">
-                            <span
-                                className="text-xs font-bold uppercase tracking-wider mb-0.5"
-                                style={{ color: '#be123c', letterSpacing: '0.05em' }}
-                            >
-                                Peringatan Alergi Pasien
-                            </span>
-                            <span
-                                className="text-xs font-semibold"
-                                style={{ color: '#881337', lineHeight: 1.4 }}
-                            >
-                                {headerRM.riwayat_alergi}
-                            </span>
-                        </div>
-                    </div>
-                )}
-
-                {/* ── SECTION 1: ANAMNESIS & RIWAYAT PASIEN ── */}
-                <div className="p-3 surface-50 border-round-xl border-1 surface-border flex flex-column gap-3">
-                    <div className="flex align-items-center justify-content-between pb-2 border-bottom-1 surface-border">
-                        <div className="flex align-items-center" style={{ gap: '8px' }}>
-                            <FileText size={14} className="text-teal-600 flex-shrink-0" />
-                            <span
-                                className="text-xs font-bold text-teal-800 uppercase"
-                                style={{ letterSpacing: '0.05em', lineHeight: 1.2 }}
-                            >
-                                ANAMNESIS &amp; RIWAYAT PASIEN
-                            </span>
-                        </div>
-                        <span
-                            className="text-[11px] font-bold text-teal-700 bg-teal-50 border-1 border-teal-200 inline-flex align-items-center justify-content-center flex-shrink-0"
-                            style={{
-                                height: '24px',
-                                padding: '0 10px',
-                                borderRadius: '6px',
-                                whiteSpace: 'nowrap',
-                                lineHeight: 1,
-                                letterSpacing: '0.025em',
-                            }}
-                        >
-                            Riwayat Medis
-                        </span>
-                    </div>
-
-                    <div className="grid formgrid text-xs -m-1.5">
-                        <div className="col-12 md:col-4 p-1.5">
-                            <div className="bg-white border-round-lg border-1 surface-border p-3 h-full flex flex-column justify-content-between">
-                                <div>
-                                    <span
-                                        className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]"
-                                        style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                    >
-                                        Keluhan Utama
-                                    </span>
-                                    <div className="text-xs font-semibold text-slate-800" style={{ lineHeight: 1.6 }}>
-                                        {renderFieldContent(headerRM.keluhan, 'Tidak ada keluhan khusus')}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-12 md:col-4 p-1.5">
-                            <div className="bg-white border-round-lg border-1 surface-border p-3 h-full flex flex-column justify-content-between">
-                                <div>
-                                    <span
-                                        className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]"
-                                        style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                    >
-                                        Durasi Keluhan
-                                    </span>
-                                    <div className="text-xs font-semibold text-slate-800" style={{ lineHeight: 1.6 }}>
-                                        {renderFieldContent(headerRM.durasi_keluhan, 'Tidak disebutkan')}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-12 md:col-4 p-1.5">
-                            <div className="bg-white border-round-lg border-1 surface-border p-3 h-full flex flex-column justify-content-between">
-                                <div>
-                                    <span
-                                        className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px]"
-                                        style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                    >
-                                        Treatment Sebelumnya
-                                    </span>
-                                    <div className="text-xs font-semibold text-slate-800" style={{ lineHeight: 1.6 }}>
-                                        {renderFieldContent(headerRM.riwayat_treatment, 'Belum pernah treatment sebelumnya')}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Foto Before Awal */}
-                    {beforeFotoUrl && (
-                        <div className="bg-white border-round-lg border-1 surface-border p-3 flex align-items-center" style={{ gap: '14px' }}>
-                            <div
-                                className="relative border-round-md overflow-hidden border-1 surface-border cursor-pointer shadow-1 flex-shrink-0"
-                                style={{ width: '56px', height: '56px' }}
-                                onClick={() => openPhotoZoom(beforeFotoUrl, `Foto Kondisi Awal — ${formatDateIndo(selectedVisit.tanggal_kunjungan)}`)}
-                            >
-                                <img
-                                    src={getFullImageUrl(beforeFotoUrl)}
-                                    alt="Foto Awal"
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        if (!target.src.includes('/api/assets')) {
-                                            target.src = `/api/assets${beforeFotoUrl}`;
-                                        }
-                                    }}
-                                />
-                                <div className="absolute inset-0 bg-black-alpha-30 opacity-0 hover:opacity-100 flex align-items-center justify-content-center transition-all">
-                                    <ZoomIn size={16} className="text-white" />
-                                </div>
-                            </div>
-                            <div className="text-xs">
-                                <span className="font-bold text-900 block mb-1">Foto Kondisi Awal Pasien</span>
-                                <span className="text-500 text-[11px]">Klik untuk melihat foto ukuran penuh</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* ── SECTION 2: EVALUASI KULIT (5 Card Konsisten) ── */}
-                <div className="p-3 surface-50 border-round-xl border-1 surface-border flex flex-column gap-3">
-                    <div className="flex align-items-center justify-content-between pb-2 border-bottom-1 surface-border">
-                        <div className="flex align-items-center" style={{ gap: '8px' }}>
-                            <Activity size={14} className="text-teal-600 flex-shrink-0" />
-                            <span
-                                className="text-xs font-bold text-teal-800 uppercase"
-                                style={{ letterSpacing: '0.05em', lineHeight: 1.2 }}
-                            >
-                                HASIL EVALUASI KULIT
-                            </span>
-                        </div>
-                        <span
-                            className="text-[11px] font-bold text-teal-700 bg-teal-50 border-1 border-teal-200 inline-flex align-items-center justify-content-center flex-shrink-0"
-                            style={{
-                                height: '24px',
-                                padding: '0 10px',
-                                borderRadius: '6px',
-                                whiteSpace: 'nowrap',
-                                lineHeight: 1,
-                                letterSpacing: '0.025em',
-                            }}
-                        >
-                            5 Parameter
-                        </span>
-                    </div>
-
-                    <div className="grid formgrid text-xs -m-1.5">
-                        {(() => {
-                            const items = [
-                                {
-                                    label: 'Jenis Kulit',
-                                    value: headerRM.pemeriksaan_skin_type || 'Normal',
-                                    isFinding:
-                                        Boolean(headerRM.pemeriksaan_skin_type) &&
-                                        headerRM.pemeriksaan_skin_type !== '-' &&
-                                        headerRM.pemeriksaan_skin_type.toLowerCase() !== 'normal',
-                                },
-                                {
-                                    label: 'Acne',
-                                    value:
-                                        headerRM.pemeriksaan_acne && headerRM.pemeriksaan_acne !== '-'
-                                            ? headerRM.pemeriksaan_acne
-                                            : 'Tidak Ada',
-                                    isFinding:
-                                        Boolean(headerRM.pemeriksaan_acne) &&
-                                        headerRM.pemeriksaan_acne !== '-' &&
-                                        headerRM.pemeriksaan_acne.toLowerCase() !== 'tidak ada',
-                                },
-                                {
-                                    label: 'Inflamasi',
-                                    value:
-                                        headerRM.pemeriksaan_inflammation && headerRM.pemeriksaan_inflammation !== '-'
-                                            ? headerRM.pemeriksaan_inflammation
-                                            : 'Tidak Ada',
-                                    isFinding:
-                                        Boolean(headerRM.pemeriksaan_inflammation) &&
-                                        headerRM.pemeriksaan_inflammation !== '-' &&
-                                        headerRM.pemeriksaan_inflammation.toLowerCase() !== 'tidak ada',
-                                },
-                                {
-                                    label: 'Pigmentasi',
-                                    value:
-                                        headerRM.pemeriksaan_pigmentation && headerRM.pemeriksaan_pigmentation !== '-'
-                                            ? headerRM.pemeriksaan_pigmentation
-                                            : 'Tidak Ada',
-                                    isFinding:
-                                        Boolean(headerRM.pemeriksaan_pigmentation) &&
-                                        headerRM.pemeriksaan_pigmentation !== '-' &&
-                                        headerRM.pemeriksaan_pigmentation.toLowerCase() !== 'tidak ada',
-                                },
-                                {
-                                    label: 'Sensitivitas',
-                                    value: headerRM.pemeriksaan_sensitivity || 'Rendah',
-                                    isFinding:
-                                        headerRM.pemeriksaan_sensitivity === 'Tinggi' ||
-                                        headerRM.pemeriksaan_sensitivity === 'Sedang',
-                                },
-                            ];
-
-                            return items.map((item, idx) => {
-                                let badgeStyle: React.CSSProperties = {
-                                    backgroundColor: '#f8fafc',
-                                    color: '#64748b',
-                                    border: '1px solid #e2e8f0',
-                                    fontWeight: 700,
-                                };
-
-                                if (item.isFinding) {
-                                    if (item.label === 'Jenis Kulit') {
-                                        badgeStyle = {
-                                            backgroundColor: '#f1f5f9',
-                                            color: '#334155',
-                                            border: '1px solid #cbd5e1',
-                                            fontWeight: 700,
-                                        };
-                                    } else {
-                                        badgeStyle = {
-                                            backgroundColor: '#f0fdfa',
-                                            color: '#0f766e',
-                                            border: '1px solid #99f6e4',
-                                            fontWeight: 700,
-                                        };
-                                    }
-                                }
-
-                                return (
-                                    <div key={idx} className="col-6 sm:col-4 md:col p-1.5">
-                                        <div className="bg-white border-round-lg border-1 surface-border p-3 text-center flex flex-column justify-content-between h-full">
-                                            <span
-                                                className="text-slate-500 font-bold uppercase block mb-2 text-[10px]"
-                                                style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                            >
-                                                {item.label}
-                                            </span>
-                                            <span
-                                                className="inline-flex align-items-center justify-content-center text-[11px] font-bold"
-                                                style={{
-                                                    ...badgeStyle,
-                                                    height: '24px',
-                                                    padding: '0 10px',
-                                                    borderRadius: '6px',
-                                                    lineHeight: 1,
-                                                    letterSpacing: '0.025em',
-                                                    whiteSpace: 'nowrap',
-                                                }}
-                                            >
-                                                {item.value}
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            });
-                        })()}
-                    </div>
-                </div>
-
-                {/* ── SECTION 3: SOAP KLINIS (1 Grid Setara 4 Kolom: S, O, A, P) ── */}
-                <div className="p-3 surface-50 border-round-xl border-1 surface-border flex flex-column gap-3">
-                    <div className="flex align-items-center justify-content-between pb-2 border-bottom-1 surface-border">
-                        <div className="flex align-items-center" style={{ gap: '8px' }}>
-                            <Stethoscope size={14} className="text-teal-600 flex-shrink-0" />
-                            <span
-                                className="text-xs font-bold text-teal-800 uppercase"
-                                style={{ letterSpacing: '0.05em', lineHeight: 1.2 }}
-                            >
-                                SOAP KLINIS &amp; DIAGNOSIS
-                            </span>
-                        </div>
-                        <span
-                            className="text-[11px] font-bold text-teal-700 bg-teal-50 border-1 border-teal-200 inline-flex align-items-center justify-content-center flex-shrink-0"
-                            style={{
-                                height: '24px',
-                                padding: '0 10px',
-                                borderRadius: '6px',
-                                whiteSpace: 'nowrap',
-                                lineHeight: 1,
-                                letterSpacing: '0.025em',
-                            }}
-                        >
-                            Rekam Medis
-                        </span>
-                    </div>
-
-                    <div className="grid formgrid text-xs -m-1.5">
-                        {/* S — Subjective */}
-                        <div className="col-12 sm:col-6 lg:col-3 p-1.5">
-                            <div
-                                className="bg-white border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
-                                style={{ borderLeftColor: '#0f766e' }}
-                            >
-                                <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                    <FileText size={14} className="text-teal-600 flex-shrink-0" />
-                                    <span
-                                        className="text-xs font-bold text-teal-900 uppercase"
-                                        style={{ letterSpacing: '0.04em', lineHeight: 1.2 }}
-                                    >
-                                        S — Subjective
-                                    </span>
-                                </div>
-                                <div className="flex-grow-1 text-slate-800 text-xs font-semibold" style={{ lineHeight: 1.6 }}>
-                                    {renderFieldContent(headerRM.subjective || headerRM.keluhan, '(Tidak dicatat)')}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* O — Objective */}
-                        <div className="col-12 sm:col-6 lg:col-3 p-1.5">
-                            <div
-                                className="bg-white border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
-                                style={{ borderLeftColor: '#0f766e' }}
-                            >
-                                <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                    <Activity size={14} className="text-teal-600 flex-shrink-0" />
-                                    <span
-                                        className="text-xs font-bold text-teal-900 uppercase"
-                                        style={{ letterSpacing: '0.04em', lineHeight: 1.2 }}
-                                    >
-                                        O — Objective
-                                    </span>
-                                </div>
-                                <div className="flex-grow-1 text-slate-800 text-xs font-semibold" style={{ lineHeight: 1.6 }}>
-                                    {renderFieldContent(headerRM.objective, '(Tidak dicatat)')}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* A — Assessment & Diagnosis */}
-                        <div className="col-12 sm:col-6 lg:col-3 p-1.5">
-                            <div
-                                className="bg-white border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
-                                style={{ borderLeftColor: '#0f766e' }}
-                            >
-                                <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                    <Stethoscope size={14} className="text-teal-600 flex-shrink-0" />
-                                    <span
-                                        className="text-xs font-bold text-teal-900 uppercase"
-                                        style={{ letterSpacing: '0.04em', lineHeight: 1.2 }}
-                                    >
-                                        A — Assessment
-                                    </span>
-                                </div>
-                                <div className="flex-grow-1 text-slate-800 text-xs font-semibold" style={{ lineHeight: 1.6 }}>
-                                    {(() => {
-                                        const dx =
-                                            headerRM.diagnosis &&
-                                            headerRM.diagnosis !== '-' &&
-                                            headerRM.diagnosis.trim() !== ''
-                                                ? headerRM.diagnosis
-                                                : null;
-                                        const assess =
-                                            headerRM.assessment &&
-                                            headerRM.assessment !== '-' &&
-                                            headerRM.assessment.trim() !== ''
-                                                ? headerRM.assessment
-                                                : null;
-
-                                        if (!dx && !assess) {
-                                            return renderFieldContent(null, '(Tidak dicatat)');
-                                        }
+                        {/* Rincian Layanan & Tindakan */}
+                        {layananList.length > 0 ? (
+                            <table className="rme-data-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '36px', textAlign: 'center' }}>No</th>
+                                        <th>Nama Layanan / Tindakan</th>
+                                        <th style={{ width: '130px' }}>Ruangan</th>
+                                        <th style={{ width: '180px' }}>Petugas / Pelaksana</th>
+                                        <th>Catatan Hasil Tindakan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {layananList.map((lay: any, idx: number) => {
+                                        const dokterObj = lay.petugas || lay.rekam_medis?.dokter_penanggung_jawab || null;
+                                        const terapisList: any[] = Array.isArray(lay.terapis_pendamping) ? lay.terapis_pendamping : [];
+                                        const allDaftarPetugas: any[] = Array.isArray(lay.daftar_petugas) && lay.daftar_petugas.length > 0
+                                            ? lay.daftar_petugas
+                                            : [];
+                                        const catatan = lay.catatan_hasil_treatment || lay.catatan_tindakan || lay.catatan_petugas || '-';
 
                                         return (
-                                            <div className="flex flex-column" style={{ gap: '8px' }}>
-                                                {dx && (
-                                                    <div>
-                                                        <span
-                                                            className="text-[10px] font-bold text-slate-500 uppercase block mb-1"
-                                                            style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                                        >
-                                                            Dx Medis:
-                                                        </span>
-                                                        {renderFieldContent(dx)}
-                                                    </div>
-                                                )}
-                                                {assess && (
-                                                    <div>
-                                                        <span
-                                                            className="text-[10px] font-bold text-slate-500 uppercase block mb-1"
-                                                            style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                                        >
-                                                            Keterangan:
-                                                        </span>
-                                                        {renderFieldContent(assess)}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <tr key={idx}>
+                                                <td style={{ textAlign: 'center', fontWeight: 600 }}>{idx + 1}</td>
+                                                <td style={{ fontWeight: 700, color: '#0f172a' }}>{lay.nama_layanan || 'Pelayanan Klinik'}</td>
+                                                <td>{lay.nama_ruangan || '-'}</td>
+                                                <td>
+                                                    {allDaftarPetugas.length > 0 ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10.5px' }}>
+                                                            {allDaftarPetugas.map((p: any, pIdx: number) => (
+                                                                <div key={pIdx} style={{ lineHeight: '1.3' }}>
+                                                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{p.nama}</span>
+                                                                    <span style={{ color: p.is_dokter_pj ? '#0f766e' : '#7c3aed', fontSize: '10px', fontWeight: 600 }}>
+                                                                        {' '}({p.role || p.jabatan || 'PETUGAS'})
+                                                                    </span>
+                                                                    {p.no_sip && p.no_sip !== '-' && (
+                                                                        <div style={{ fontSize: '9.5px', color: '#64748b' }}>SIP: {p.no_sip}</div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (dokterObj || terapisList.length > 0) ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10.5px' }}>
+                                                            {dokterObj && (
+                                                                <div style={{ lineHeight: '1.3' }}>
+                                                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{dokterObj.nama}</span>
+                                                                    <span style={{ color: '#0f766e', fontSize: '10px', fontWeight: 600 }}> (Dokter/PJ)</span>
+                                                                    {(dokterObj.kode_karyawan || dokterObj.no_sip) && (
+                                                                        <div style={{ fontSize: '9.5px', color: '#64748b' }}>SIP: {dokterObj.kode_karyawan || dokterObj.no_sip}</div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {terapisList.map((t: any, tIdx: number) => (
+                                                                <div key={tIdx} style={{ lineHeight: '1.3' }}>
+                                                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{t.nama || t.nama_petugas}</span>
+                                                                    <span style={{ color: '#7c3aed', fontSize: '10px', fontWeight: 600 }}>
+                                                                        {' '}({(t.role || t.jabatan || 'TERAPIS').toUpperCase()})
+                                                                    </span>
+                                                                    {t.no_sip && t.no_sip !== '-' && (
+                                                                        <div style={{ fontSize: '9.5px', color: '#64748b' }}>SIP: {t.no_sip}</div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ fontSize: '10.5px', fontWeight: 700 }}>{dokterFormatted}</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ color: catatan === '-' ? '#94a3b8' : '#0f172a' }}>{catatan}</td>
+                                            </tr>
                                         );
-                                    })()}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* P — Plan */}
-                        <div className="col-12 sm:col-6 lg:col-3 p-1.5">
-                            <div
-                                className="bg-white border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
-                                style={{ borderLeftColor: '#0f766e' }}
-                            >
-                                <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                    <ClipboardList size={14} className="text-teal-600 flex-shrink-0" />
-                                    <span
-                                        className="text-xs font-bold text-teal-900 uppercase"
-                                        style={{ letterSpacing: '0.04em', lineHeight: 1.2 }}
-                                    >
-                                        P — Plan
-                                    </span>
-                                </div>
-                                <div className="flex-grow-1 text-slate-800 text-xs font-semibold" style={{ lineHeight: 1.6 }}>
-                                    {renderFieldContent(headerRM.plan, 'Tidak ada rencana khusus')}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── SECTION 4: SESI TINDAKAN & HASIL TREATMENT ── */}
-                <div className="p-3 surface-50 border-round-xl border-1 surface-border flex flex-column gap-3">
-                    <div className="flex align-items-center justify-content-between pb-2 border-bottom-1 surface-border">
-                        <div className="flex align-items-center" style={{ gap: '8px' }}>
-                            <Sparkles size={14} className="text-teal-600 flex-shrink-0" />
-                            <span
-                                className="text-xs font-bold text-teal-800 uppercase"
-                                style={{ letterSpacing: '0.05em', lineHeight: 1.2 }}
-                            >
-                                SESI TINDAKAN &amp; HASIL TREATMENT
-                            </span>
-                        </div>
-                        <span
-                            className="text-[11px] font-bold text-teal-700 bg-teal-50 border-1 border-teal-200 inline-flex align-items-center justify-content-center flex-shrink-0"
-                            style={{
-                                height: '24px',
-                                padding: '0 10px',
-                                borderRadius: '6px',
-                                whiteSpace: 'nowrap',
-                                lineHeight: 1,
-                                letterSpacing: '0.025em',
-                            }}
-                        >
-                            {layananList.length} Sesi
-                        </span>
-                    </div>
-
-                    <div>
-                        {layananList.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-slate-500 italic bg-white border-round-lg border-1 surface-border flex flex-column align-items-center justify-content-center" style={{ gap: '8px' }}>
-                                <FileText size={18} className="text-slate-400" />
-                                <span>Tidak ada catatan tindakan pada kunjungan ini.</span>
-                            </div>
+                                    })}
+                                </tbody>
+                            </table>
                         ) : (
-                            <div className="flex flex-column gap-3">
-                                {layananList.map((layanan: any, lIdx: number) => {
-                                    const isKonsul =
-                                        (layanan.nama_ruangan &&
-                                            layanan.nama_ruangan.toLowerCase().includes('konsul')) ||
-                                        layanan.jenis_layanan === 'konsultasi';
-                                    const fotos = layanan.rekam_medis?.fotos || [];
-
-                                    const validFormData = (
-                                        layanan.rekam_medis?.formatted_data_form || []
-                                    ).filter(
-                                        (f: any) =>
-                                            f.key &&
-                                            f.key !== 'undefined' &&
-                                            f.key !== 'null' &&
-                                            f.value &&
-                                            f.value !== '-' &&
-                                            f.value !== ''
-                                    );
-
-                                    const terapisList: any[] = Array.isArray(layanan.terapis_pendamping) && layanan.terapis_pendamping.length > 0
-                                        ? layanan.terapis_pendamping
-                                        : (Array.isArray(layanan.daftar_petugas) && layanan.daftar_petugas.length > 0
-                                            ? layanan.daftar_petugas.filter((p: any) => !p.is_dokter_pj && p.role !== 'DOKTER')
-                                            : (Array.isArray(headerRM.terapis_list) ? headerRM.terapis_list : []));
-
-                                    const dokterPelaksana = layanan.petugas || layanan.rekam_medis?.dokter_penanggung_jawab || (
-                                        Array.isArray(layanan.daftar_petugas) ? layanan.daftar_petugas.find((p: any) => p.is_dokter_pj || p.role === 'DOKTER') : null
-                                    ) || (headerRM.dokter_nama ? { nama: headerRM.dokter_nama, jabatan: headerRM.dokter_jabatan || 'Dokter', no_sip: headerRM.no_sip } : null);
-
-                                    const allPetugas: any[] = [];
-                                    if (dokterPelaksana) {
-                                        allPetugas.push({
-                                            nama: dokterPelaksana.nama,
-                                            no_sip: dokterPelaksana.kode_karyawan || dokterPelaksana.no_sip || headerRM.no_sip || '-',
-                                            role: (dokterPelaksana.jabatan || 'DOKTER').toUpperCase(),
-                                        });
-                                    }
-                                    terapisList.forEach((t: any) => {
-                                        allPetugas.push({
-                                            nama: t.nama || t.nama_petugas,
-                                            no_sip: t.no_sip || t.sip || '-',
-                                            role: (t.role || t.jabatan || 'TERAPIS').toUpperCase(),
-                                        });
-                                    });
-
-                                    const hasNotes = Boolean(
-                                        layanan.catatan_petugas ||
-                                        layanan.catatan_tindakan ||
-                                        layanan.catatan_hasil_treatment
-                                    );
-
-                                    const hasAnyContent =
-                                        allPetugas.length > 0 ||
-                                        hasNotes ||
-                                        validFormData.length > 0 ||
-                                        fotos.length > 0;
-
-                                    return (
-                                        <div
-                                            key={layanan.kode_antrian_layanan || lIdx}
-                                            className="border-round-xl border-1 surface-border overflow-hidden bg-white shadow-none"
-                                        >
-                                            {/* Header Sesi */}
-                                            <div className="surface-100 px-3 py-2.5 border-bottom-1 surface-border flex align-items-center justify-content-between flex-wrap gap-2">
-                                                <div className="flex align-items-center min-w-0" style={{ gap: '10px' }}>
-                                                    <span
-                                                        className="text-[11px] font-bold inline-flex align-items-center justify-content-center flex-shrink-0 uppercase"
-                                                        style={{
-                                                            height: '24px',
-                                                            padding: '0 10px',
-                                                            borderRadius: '6px',
-                                                            lineHeight: 1,
-                                                            letterSpacing: '0.025em',
-                                                            backgroundColor: isKonsul ? '#f0f9ff' : '#f0fdf4',
-                                                            color: isKonsul ? '#0284c7' : '#16a34a',
-                                                            border: `1px solid ${isKonsul ? '#bae6fd' : '#bbf7d0'}`
-                                                        }}
-                                                    >
-                                                        {isKonsul ? 'KONSULTASI' : 'TINDAKAN'}
-                                                    </span>
-                                                    <span className="font-bold text-900 text-xs md:text-sm truncate min-w-0" style={{ lineHeight: 1.3 }}>
-                                                        {layanan.nama_layanan || 'Pelayanan Klinis'}
-                                                    </span>
-                                                </div>
-                                                <div className="flex align-items-center flex-shrink-0" style={{ gap: '8px' }}>
-                                                    {layanan.status && (
-                                                        <span
-                                                            className="text-[11px] font-bold inline-flex align-items-center justify-content-center flex-shrink-0 uppercase"
-                                                            style={{
-                                                                height: '24px',
-                                                                padding: '0 10px',
-                                                                borderRadius: '6px',
-                                                                lineHeight: 1,
-                                                                letterSpacing: '0.025em',
-                                                                backgroundColor: layanan.status.toLowerCase() === 'selesai' ? '#f0fdf4' : '#eff6ff',
-                                                                color: layanan.status.toLowerCase() === 'selesai' ? '#16a34a' : '#2563eb',
-                                                                border: `1px solid ${layanan.status.toLowerCase() === 'selesai' ? '#bbf7d0' : '#bfdbfe'}`
-                                                            }}
-                                                        >
-                                                            {layanan.status}
-                                                        </span>
-                                                    )}
-                                                    {layanan.nama_ruangan && (
-                                                        <span
-                                                            className="text-[11px] text-slate-700 font-semibold inline-flex align-items-center bg-white border-1 surface-border flex-shrink-0"
-                                                            style={{ height: '24px', padding: '0 10px', borderRadius: '6px', lineHeight: 1, gap: '6px' }}
-                                                        >
-                                                            <Building2 size={13} className="text-teal-600 flex-shrink-0" />
-                                                            <span className="truncate max-w-10rem">{layanan.nama_ruangan}</span>
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Sesi Content (Kotak-Kotak Konsisten dengan Bagian Atas) */}
-                                            <div className="p-3 flex flex-column gap-3 text-xs">
-                                                {/* KOTAK 1: Dokter & Petugas Pelaksana Ruangan */}
-                                                {allPetugas.length > 0 && (
-                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3">
-                                                        <div className="flex align-items-center justify-content-between pb-2 mb-2 border-bottom-1 surface-border">
-                                                            <div className="flex align-items-center" style={{ gap: '8px' }}>
-                                                                <User size={14} className="text-teal-600 flex-shrink-0" />
-                                                                <span
-                                                                    className="text-xs font-bold text-teal-800 uppercase"
-                                                                    style={{ letterSpacing: '0.05em', lineHeight: 1.2 }}
-                                                                >
-                                                                    Dokter &amp; Petugas Pelaksana Ruangan
-                                                                </span>
-                                                            </div>
-                                                            <span
-                                                                className="text-[11px] font-bold border-round-md bg-white border-1 surface-border text-slate-600 inline-flex align-items-center justify-content-center"
-                                                                style={{ borderRadius: '6px', height: '24px', padding: '0 10px', lineHeight: 1, letterSpacing: '0.025em' }}
-                                                            >
-                                                                {allPetugas.length} Petugas
-                                                            </span>
-                                                        </div>
-                                                        <div className="grid formgrid -m-1">
-                                                            {allPetugas.map((p: any, pIdx: number) => (
-                                                                <div key={pIdx} className={`col-12 ${allPetugas.length > 1 ? 'sm:col-6' : ''} p-1`}>
-                                                                    <div className="bg-white p-3 border-round-md border-1 surface-border flex align-items-center justify-content-between gap-2 h-full">
-                                                                        <div className="flex align-items-center min-w-0" style={{ gap: '12px' }}>
-                                                                            <div
-                                                                                className="flex align-items-center justify-content-center flex-shrink-0 font-bold text-xs"
-                                                                                style={{
-                                                                                    width: '30px',
-                                                                                    height: '30px',
-                                                                                    minWidth: '30px',
-                                                                                    minHeight: '30px',
-                                                                                    borderRadius: '50%',
-                                                                                    backgroundColor: p.role === 'DOKTER' ? '#ccfbf1' : '#f0fdf4',
-                                                                                    color: '#0f766e',
-                                                                                    border: '1px solid #99f6e4'
-                                                                                }}
-                                                                            >
-                                                                                {p.role === 'DOKTER' ? 'Dr' : 'Pt'}
-                                                                            </div>
-                                                                            <div className="min-w-0">
-                                                                                <span
-                                                                                    className="font-semibold text-slate-900 text-xs block truncate"
-                                                                                    style={{ lineHeight: 1.3 }}
-                                                                                    title={p.nama}
-                                                                                >
-                                                                                    {p.nama}
-                                                                                </span>
-                                                                                <span
-                                                                                    className="text-slate-500 block text-[10.5px] mt-0.5 truncate"
-                                                                                    style={{ lineHeight: 1.2, fontWeight: 500 }}
-                                                                                >
-                                                                                    SIP: {p.no_sip}
-                                                                                </span>
-                                                                            </div>
-                                                                        </div>
-                                                                        <span
-                                                                            className="text-[11px] font-bold inline-flex align-items-center justify-content-center flex-shrink-0 uppercase"
-                                                                            style={{
-                                                                                height: '24px',
-                                                                                padding: '0 10px',
-                                                                                borderRadius: '6px',
-                                                                                lineHeight: 1,
-                                                                                letterSpacing: '0.025em',
-                                                                                backgroundColor: p.role === 'DOKTER' ? '#ecfdf5' : '#f0fdfa',
-                                                                                color: '#0f766e',
-                                                                                border: '1px solid #99f6e4'
-                                                                            }}
-                                                                        >
-                                                                            {p.role}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* KOTAK 2: Catatan Klinis Sesi (SOAP Style Kotak-Kotak Beraksen Teal) */}
-                                                {hasNotes && (
-                                                    <div className="grid formgrid -m-1.5">
-                                                        {/* Catatan Petugas */}
-                                                        {layanan.catatan_petugas && (
-                                                            <div
-                                                                className={`col-12 ${
-                                                                    layanan.catatan_tindakan && layanan.catatan_hasil_treatment
-                                                                        ? 'lg:col-4 md:col-6'
-                                                                        : (layanan.catatan_tindakan || layanan.catatan_hasil_treatment ? 'md:col-6' : '')
-                                                                } p-1.5`}
-                                                            >
-                                                                <div
-                                                                    className="surface-50 border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
-                                                                    style={{ borderLeftColor: '#0f766e' }}
-                                                                >
-                                                                    <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                                                        <FileText size={14} className="text-teal-600 flex-shrink-0" />
-                                                                        <span
-                                                                            className="text-xs font-bold text-teal-900 uppercase"
-                                                                            style={{ letterSpacing: '0.04em', lineHeight: 1.2 }}
-                                                                        >
-                                                                            Catatan Petugas Ruangan
-                                                                        </span>
-                                                                    </div>
-                                                                    <div
-                                                                        className="flex-grow-1 text-xs font-semibold text-slate-800"
-                                                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: 1.6 }}
-                                                                    >
-                                                                        {renderFieldContent(layanan.catatan_petugas)}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Catatan Tindakan */}
-                                                        {layanan.catatan_tindakan && (
-                                                            <div
-                                                                className={`col-12 ${
-                                                                    layanan.catatan_petugas && layanan.catatan_hasil_treatment
-                                                                        ? 'lg:col-4 md:col-6'
-                                                                        : (layanan.catatan_petugas || layanan.catatan_hasil_treatment ? 'md:col-6' : '')
-                                                                } p-1.5`}
-                                                            >
-                                                                <div
-                                                                    className="surface-50 border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
-                                                                    style={{ borderLeftColor: '#0f766e' }}
-                                                                >
-                                                                    <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                                                        <Activity size={14} className="text-teal-600 flex-shrink-0" />
-                                                                        <span
-                                                                            className="text-xs font-bold text-teal-900 uppercase"
-                                                                            style={{ letterSpacing: '0.04em', lineHeight: 1.2 }}
-                                                                        >
-                                                                            Catatan Prosedur / Tindakan
-                                                                        </span>
-                                                                    </div>
-                                                                    <div
-                                                                        className="flex-grow-1 text-xs font-semibold text-slate-800"
-                                                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: 1.6 }}
-                                                                    >
-                                                                        {renderFieldContent(layanan.catatan_tindakan)}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Hasil Treatment */}
-                                                        {layanan.catatan_hasil_treatment && (
-                                                            <div
-                                                                className={`col-12 ${
-                                                                    layanan.catatan_petugas && layanan.catatan_tindakan
-                                                                        ? 'lg:col-4 md:col-6'
-                                                                        : (layanan.catatan_petugas || layanan.catatan_tindakan ? 'md:col-6' : '')
-                                                                } p-1.5`}
-                                                            >
-                                                                <div
-                                                                    className="surface-50 border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
-                                                                    style={{ borderLeftColor: '#0f766e' }}
-                                                                >
-                                                                    <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                                                        <Sparkles size={14} className="text-teal-600 flex-shrink-0" />
-                                                                        <span
-                                                                            className="text-xs font-bold text-teal-900 uppercase"
-                                                                            style={{ letterSpacing: '0.04em', lineHeight: 1.2 }}
-                                                                        >
-                                                                            Hasil Treatment &amp; Evaluasi
-                                                                        </span>
-                                                                    </div>
-                                                                    <div
-                                                                        className="flex-grow-1 text-xs font-semibold text-slate-800"
-                                                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: 1.6 }}
-                                                                    >
-                                                                        {renderFieldContent(layanan.catatan_hasil_treatment)}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* KOTAK 3: Data & Parameter Klinis Ruangan */}
-                                                {validFormData.length > 0 && (
-                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3">
-                                                        <div className="flex align-items-center pb-2 mb-2 border-bottom-1 surface-border" style={{ gap: '8px' }}>
-                                                            <ClipboardList size={14} className="text-teal-600 flex-shrink-0" />
-                                                            <span
-                                                                className="text-xs font-bold text-teal-800 uppercase"
-                                                                style={{ letterSpacing: '0.05em', lineHeight: 1.2 }}
-                                                            >
-                                                                Data &amp; Parameter Klinis Ruangan
-                                                            </span>
-                                                        </div>
-                                                        <div className="grid formgrid -m-1">
-                                                            {validFormData.map((f: any, fIdx: number) => (
-                                                                <div key={fIdx} className="col-12 sm:col-6 md:col-4 p-1">
-                                                                    <div className="bg-white p-3 border-round-md border-1 surface-border h-full flex flex-column justify-content-between">
-                                                                        <span
-                                                                            className="text-slate-500 font-bold uppercase block mb-1.5 text-[10px] truncate"
-                                                                            style={{ letterSpacing: '0.06em', lineHeight: 1.2 }}
-                                                                        >
-                                                                            {f.label}
-                                                                        </span>
-                                                                        <span
-                                                                            className="font-semibold text-slate-900 text-xs block break-words"
-                                                                            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: 1.6 }}
-                                                                        >
-                                                                            {renderFieldContent(f.value)}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* KOTAK 4: Dokumentasi Foto Sesi */}
-                                                {fotos && fotos.length > 0 && (
-                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3">
-                                                        <div className="flex align-items-center justify-content-between pb-2 mb-2 border-bottom-1 surface-border">
-                                                            <div className="flex align-items-center" style={{ gap: '8px' }}>
-                                                                <ImageIcon size={14} className="text-teal-600 flex-shrink-0" />
-                                                                <span
-                                                                    className="text-xs font-bold text-teal-800 uppercase"
-                                                                    style={{ letterSpacing: '0.05em', lineHeight: 1.2 }}
-                                                                >
-                                                                    Dokumentasi Foto Sesi (Sebelum &amp; Sesudah)
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-[10.5px] text-slate-500 italic">
-                                                                Klik untuk perbesar
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex flex-wrap align-items-center" style={{ gap: '12px' }}>
-                                                            {fotos.map((foto: any, fIdx: number) => {
-                                                                const isBefore =
-                                                                    foto.tipe === 'before' || foto.tipe === 'foto_before';
-                                                                const isAfter =
-                                                                    foto.tipe === 'after' || foto.tipe === 'foto_after';
-                                                                const badgeLabel = isBefore
-                                                                    ? 'BEFORE'
-                                                                    : isAfter
-                                                                    ? 'AFTER'
-                                                                    : String(foto.tipe || 'FOTO').toUpperCase();
-                                                                const fullUrl = getFullImageUrl(foto.url_foto);
-
-                                                                return (
-                                                                    <div
-                                                                        key={foto.id || fIdx}
-                                                                        className="bg-white p-2.5 border-round-lg border-1 surface-border flex flex-column align-items-center cursor-pointer hover:shadow-1 transition-all"
-                                                                        style={{ gap: '8px' }}
-                                                                        onClick={() =>
-                                                                            openPhotoZoom(
-                                                                                foto.url_foto,
-                                                                                `${badgeLabel} — ${layanan.nama_layanan || 'Treatment'}`
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <div
-                                                                            className="relative border-round-md overflow-hidden border-1 surface-border bg-gray-50"
-                                                                            style={{ width: '68px', height: '68px' }}
-                                                                        >
-                                                                            <img
-                                                                                src={fullUrl}
-                                                                                alt={badgeLabel}
-                                                                                className="w-full h-full object-cover"
-                                                                                onError={(e) => {
-                                                                                    const target = e.target as HTMLImageElement;
-                                                                                    if (
-                                                                                        !target.src.includes('/api/assets') &&
-                                                                                        foto.url_foto
-                                                                                    ) {
-                                                                                        target.src = `/api/assets${foto.url_foto}`;
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                            <div className="absolute inset-0 bg-black-alpha-30 opacity-0 hover:opacity-100 flex align-items-center justify-content-center transition-all">
-                                                                                <ZoomIn size={16} className="text-white" />
-                                                                            </div>
-                                                                        </div>
-                                                                        <span
-                                                                            className="text-[10px] font-bold inline-flex align-items-center justify-content-center uppercase"
-                                                                            style={{
-                                                                                height: '22px',
-                                                                                padding: '0 8px',
-                                                                                borderRadius: '4px',
-                                                                                lineHeight: 1,
-                                                                                letterSpacing: '0.025em',
-                                                                                backgroundColor: isBefore ? '#f1f5f9' : '#ecfdf5',
-                                                                                color: isBefore ? '#475569' : '#059669',
-                                                                                border: `1px solid ${isBefore ? '#cbd5e1' : '#a7f3d0'}`
-                                                                            }}
-                                                                        >
-                                                                            {badgeLabel}
-                                                                        </span>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Fallback jika tidak ada konten khusus */}
-                                                {!hasAnyContent && (
-                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3 text-xs text-slate-400 italic flex align-items-center" style={{ gap: '10px' }}>
-                                                        <CheckCircle2 size={15} className="text-teal-600 flex-shrink-0" />
-                                                        <span>
-                                                            Sesi pelayanan telah selesai sesuai prosedur standar klinis tanpa catatan khusus.
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                            <p style={{ margin: 0, fontStyle: 'italic', color: '#94a3b8', fontSize: '11px', padding: '6px' }}>
+                                Tidak ada tindakan / konsultasi tercatat.
+                            </p>
                         )}
                     </div>
+
+                    {/* 6. DOKUMENTASI FOTO KLINIS (JIKA ADA FOTO) */}
+                    {allVisitFotos.length > 0 && (
+                        <>
+                            <div className="rme-section-header">
+                                IV. Dokumentasi Foto Klinis (Sebelum &amp; Sesudah Treatment)
+                            </div>
+                            <div className="rme-border-box mb-1">
+                                <div className="flex flex-wrap align-items-center gap-3">
+                                    {allVisitFotos.map((foto, fIdx) => {
+                                        const fullUrl = getFullImageUrl(foto.url);
+                                        return (
+                                            <div
+                                                key={fIdx}
+                                                className="bg-white p-2 border-round-lg border-1 surface-border flex flex-column align-items-center cursor-pointer hover:shadow-2 transition-all"
+                                                style={{ gap: '6px' }}
+                                                onClick={() => openPhotoZoom(foto.url, foto.label)}
+                                            >
+                                                <div
+                                                    className="relative border-round-md overflow-hidden border-1 surface-border bg-gray-50"
+                                                    style={{ width: '76px', height: '76px' }}
+                                                >
+                                                    <img
+                                                        src={fullUrl}
+                                                        alt={foto.label}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            if (!target.src.includes('/api/assets') && foto.url) {
+                                                                target.src = `/api/assets${foto.url}`;
+                                                            }
+                                                        }}
+                                                    />
+                                                    <div className="absolute inset-0 bg-black-alpha-30 opacity-0 hover:opacity-100 flex align-items-center justify-content-center transition-all">
+                                                        <ZoomIn size={16} className="text-white" />
+                                                    </div>
+                                                </div>
+                                                <span
+                                                    className="text-[10px] font-bold text-slate-700 max-w-7rem text-center truncate"
+                                                    title={foto.label}
+                                                >
+                                                    {foto.label}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className="text-[10.5px] text-slate-500 italic mt-2">
+                                    * Klik gambar untuk memperbesar foto dalam ukuran resolusi penuh.
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+
                 </div>
             </div>
         );
@@ -1398,25 +1009,13 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
         return (
             <div className="flex flex-column gap-3">
                 {/* Legend Box Keterangan Status Sesuai Desain Laporan */}
-                <div className="flex flex-wrap align-items-center gap-4 p-3 surface-50 border-round-xl border-1 surface-border">
-                    <span className="flex align-items-center text-xs font-bold text-500 uppercase tracking-wider mr-2">
-                        <i className="pi pi-info-circle mr-2" /> KETERANGAN STATUS:
-                    </span>
-                    <div className="flex align-items-center gap-2">
-                        <span
-                            className="block border-round-sm"
-                            style={{ width: '12px', height: '12px', backgroundColor: '#22c55e' }}
-                        />
-                        <span className="text-xs font-semibold text-700">Selesai</span>
-                    </div>
-                    <div className="flex align-items-center gap-2">
-                        <span
-                            className="block border-round-sm"
-                            style={{ width: '12px', height: '12px', backgroundColor: '#f59e0b' }}
-                        />
-                        <span className="text-xs font-semibold text-700">Sedang Berlangsung</span>
-                    </div>
-                </div>
+                <KeteranganStatus
+                    className="mb-2"
+                    items={[
+                        { label: 'Selesai', color: '#22c55e' },
+                        { label: 'Sedang Berlangsung', color: '#f59e0b' },
+                    ]}
+                />
 
                 {/* Card Container Tabel Sesuai Desain Laporan */}
                 <div className="card p-3 border-round-xl border-1 surface-border surface-card shadow-1">
@@ -1677,8 +1276,7 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                             onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 if (previewPhotoUrl && !target.src.includes('/api/assets')) {
-                                    const cleanPath = previewPhotoUrl.replace(/^https?:\/\/[^/]+/, '');
-                                    target.src = `/api/assets${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
+                                    target.src = `/api/assets${previewPhotoUrl.replace('http://127.0.0.1:8000', '')}`;
                                 }
                             }}
                         />

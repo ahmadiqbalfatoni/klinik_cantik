@@ -10,7 +10,7 @@ interface PasienKtpCardProps {
   showMedicalAlert?: boolean;
 }
 
-export const PasienKtpCard: React.FC<PasienKtpCardProps> = ({ pasien, showMedicalAlert = true }) => {
+export const PasienKtpCard: React.FC<PasienKtpCardProps> = ({ pasien }) => {
   // Helper calculate age
   const calculateAge = (dateString?: string) => {
     if (!dateString) return null;
@@ -426,74 +426,6 @@ export const PasienKtpCard: React.FC<PasienKtpCardProps> = ({ pasien, showMedica
           </div>
         </div>
       </div>
-
-      {/* MEDICAL ALERT STRIP (IF HAS ALERGI) - REFINED, NEAT CLINICAL WARNING BANNER */}
-      {showMedicalAlert && hasAlergi && (
-        <div
-          className="w-full mt-3 p-3 border-round-xl flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-3 shadow-1"
-          style={{
-            maxWidth: '640px',
-            backgroundColor: '#fff5f5',
-            border: '1.5px solid #fca5a5',
-          }}
-        >
-          <div className="flex align-items-center gap-3">
-            {/* Warning Icon Badge */}
-            <div
-              className="w-2.5rem h-2.5rem border-round-lg flex align-items-center justify-content-center flex-shrink-0 shadow-1"
-              style={{
-                backgroundColor: '#ef4444',
-                color: '#ffffff',
-              }}
-            >
-              <span
-                className="material-symbols-outlined select-none"
-                style={{
-                  fontSize: '20px',
-                  color: '#ffffff',
-                  lineHeight: 1,
-                }}
-              >
-                warning
-              </span>
-            </div>
-
-            {/* Alert Content */}
-            <div className="flex flex-column gap-1">
-              <div className="flex align-items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-red-700 uppercase tracking-wide">
-                  PERINGATAN MEDIS :
-                </span>
-                <span
-                  className="text-xs font-bold text-red-950 uppercase border-round bg-red-100 border-1 border-red-300 tracking-wide"
-                  style={{ padding: '2px 8px' }}
-                >
-                  {pasien.alergi}
-                </span>
-              </div>
-              <div className="text-[11px] text-red-800 font-medium">
-                Waspadai pemberian resep, obat, krim, atau tindakan klinis yang kontraindikasi dengan alergi ini.
-              </div>
-            </div>
-          </div>
-
-          {/* Special Attention Chip */}
-          <div className="flex-shrink-0 self-end sm:self-center">
-            <span
-              className="text-[10.5px] font-bold text-red-800 bg-white border-round-md border-1 border-red-300 uppercase tracking-wide shadow-xs inline-flex align-items-center"
-              style={{ padding: '4px 10px', gap: '6px' }}
-            >
-              <span
-                className="material-symbols-outlined text-red-600"
-                style={{ fontSize: '15px', lineHeight: 1 }}
-              >
-                shield
-              </span>
-              <span>PERHATIAN KHUSUS</span>
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

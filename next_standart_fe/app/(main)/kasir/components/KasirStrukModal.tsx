@@ -226,13 +226,19 @@ export const KasirStrukModal: React.FC<KasirStrukModalProps> = ({ visible, resul
   }).replace(':', '.');
   const waktuStr = `${tanggalStr}, ${jamStr}`;
 
-  const totalSubtotal = result.total_harga !== undefined && result.total_harga > 0
-    ? result.total_harga
-    : (result.items || []).reduce((sum, item) => sum + (item.subtotal || 0), 0);
+  const totalSubtotal = (result.items || []).length > 0
+    ? (result.items || []).reduce((sum, item) => {
+        const isFree = Boolean(item.is_free_include || item.jenis_diskon === 'include_treatment');
+        return sum + (isFree ? 0 : (item.subtotal || 0));
+      }, 0)
+    : (result.total_harga !== undefined && result.total_harga > 0 ? result.total_harga : result.total_bayar);
 
-  const totalDiskon = result.total_diskon !== undefined
-    ? result.total_diskon
-    : (result.items || []).reduce((sum, item) => sum + (item.diskon || 0), 0);
+  const totalDiskon = (result.items || []).length > 0
+    ? (result.items || []).reduce((sum, item) => {
+        const isFree = Boolean(item.is_free_include || item.jenis_diskon === 'include_treatment');
+        return sum + (isFree ? 0 : (item.diskon || 0));
+      }, 0)
+    : (result.total_diskon !== undefined ? result.total_diskon : 0);
 
   return (
     <Dialog
@@ -375,8 +381,11 @@ export const KasirStrukModal: React.FC<KasirStrukModalProps> = ({ visible, resul
           {/* Cart Item Details (Gaya Minimarket: Item, Qty, Harga, Jumlah) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', margin: '3px 0' }}>
             {(result.items || []).map((item: CartItem, i: number) => {
-              const itemDisc = parseFloat(String(item.diskon || 0));
-              const hasDiscount = itemDisc > 0;
+              const isFreeInclude = Boolean(item.is_free_include || item.jenis_diskon === 'include_treatment');
+              const itemDisc = isFreeInclude ? 0 : parseFloat(String(item.diskon || 0));
+              const hasDiscount = !isFreeInclude && itemDisc > 0;
+              const displayHarga = isFreeInclude ? 0 : item.harga_satuan;
+              const displaySubtotal = isFreeInclude ? 0 : item.subtotal;
 
               return (
                 <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -421,7 +430,7 @@ export const KasirStrukModal: React.FC<KasirStrukModalProps> = ({ visible, resul
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {formatAngka(item.harga_satuan)}
+                      {formatAngka(displayHarga)}
                     </div>
                     <div
                       className="font-medium"
@@ -431,7 +440,7 @@ export const KasirStrukModal: React.FC<KasirStrukModalProps> = ({ visible, resul
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {formatAngka(item.subtotal)}
+                      {formatAngka(displaySubtotal)}
                     </div>
                   </div>
 
@@ -453,9 +462,10 @@ export const KasirStrukModal: React.FC<KasirStrukModalProps> = ({ visible, resul
                           gridColumn: '1 / 4',
                           textAlign: 'left',
                           minWidth: 0,
+                          fontSize: '12px',
                         }}
                       >
-                        Diskon
+                        {item.nama_promo || 'Diskon'}
                       </div>
                       <div
                         style={{
@@ -487,7 +497,7 @@ export const KasirStrukModal: React.FC<KasirStrukModalProps> = ({ visible, resul
 
             {totalDiskon > 0 && (
               <div className="flex justify-content-between font-normal text-emerald-700 receipt-discount-text">
-                <span>Voucher Diskon</span>
+                <span>Diskon / Potongan</span>
                 <span className="receipt-tabular" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   -{formatRupiah(totalDiskon)}
                 </span>

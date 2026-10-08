@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Toast } from 'primereact/toast';
 import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
@@ -47,6 +47,11 @@ export const KasirSidebar: React.FC<KasirSidebarProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>('semua');
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  const onListChangeRef = useRef(onListChange);
+  useEffect(() => {
+    onListChangeRef.current = onListChange;
+  }, [onListChange]);
+
   useEffect(() => {
     fetchList();
   }, [refreshKey]);
@@ -58,7 +63,7 @@ export const KasirSidebar: React.FC<KasirSidebarProps> = ({
       if (['00', '0000'].includes(res?.data?.status)) {
         const data = res.data.data || [];
         setList(data);
-        onListChange(data);
+        onListChangeRef.current?.(data);
       } else {
         showError(toast, res?.data?.message || 'Gagal memuat daftar transaksi');
       }

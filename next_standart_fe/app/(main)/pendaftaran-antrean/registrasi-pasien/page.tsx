@@ -17,6 +17,11 @@ import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { PasienFormCard } from '../pendaftaran-pasien/components/PasienFormCard';
 import { PasienKtpCard } from '../components/PasienKtpCard';
 import { DialogPilihanKunjungan } from '../components/DialogPilihanKunjungan';
+import {
+  RiwayatKunjunganPanel,
+  KunjunganDetailCard,
+  KunjunganRiwayat,
+} from '../components/riwayat';
 
 export interface Pasien {
   id: number;
@@ -70,9 +75,26 @@ const RegistrasiPasienPage = () => {
   const [dialogEditPasienVisible, setDialogEditPasienVisible] = useState<boolean>(false);
   const [editingPasien, setEditingPasien] = useState<Pasien | null>(null);
   const [detailPasien, setDetailPasien] = useState<Pasien | null>(null);
+  const [showRiwayat, setShowRiwayat] = useState<boolean>(false);
+  const [selectedKunjungan, setSelectedKunjungan] = useState<KunjunganRiwayat | null>(null);
+  const [riwayatData, setRiwayatData] = useState<KunjunganRiwayat[]>([]);
   const [pilihanKunjunganPasien, setPilihanKunjunganPasien] = useState<Pasien | null>(null);
   const [successDialogVisible, setSuccessDialogVisible] = useState<boolean>(false);
   const [newPatientData, setNewPatientData] = useState<any>(null);
+
+  const handleOpenDetailPasien = (p: Pasien) => {
+    setDetailPasien(p);
+    setShowRiwayat(false);
+    setSelectedKunjungan(null);
+    setRiwayatData([]);
+  };
+
+  const handleCloseDetailPasien = () => {
+    setDetailPasien(null);
+    setShowRiwayat(false);
+    setSelectedKunjungan(null);
+    setRiwayatData([]);
+  };
 
   // Key untuk mereset form tambah saat dibuka ulang
   const [formKey, setFormKey] = useState<number>(1);
@@ -159,22 +181,22 @@ const RegistrasiPasienPage = () => {
     setDialogEditPasienVisible(false);
     setEditingPasien(null);
     setRefreshTrigger((prev) => prev + 1);
-    showSuccess(toast, 'Data pasien berhasil diperbarui');
   };
 
   // DataTable Template
   const noRmBodyTemplate = (rowData: Pasien) => {
-    return <span className="font-bold text-900 font-mono">{rowData.no_rm}</span>;
+    return <span className="font-bold text-900 font-mono" style={{ whiteSpace: 'nowrap' }}>{rowData.no_rm}</span>;
   };
 
   const jenisKelaminBodyTemplate = (rowData: Pasien) => {
-    if (!rowData.jenis_kelamin) return <span className="text-400 font-italic">-</span>;
+    if (!rowData.jenis_kelamin) return <span className="text-400 font-italic" style={{ whiteSpace: 'nowrap' }}>-</span>;
     const isMale = rowData.jenis_kelamin === 'L';
     return (
       <Tag
         value={isMale ? 'Laki-Laki' : 'Perempuan'}
         severity={isMale ? 'warning' : 'success'}
         className="text-xs px-2 py-1"
+        style={{ whiteSpace: 'nowrap' }}
       />
     );
   };
@@ -228,7 +250,7 @@ const RegistrasiPasienPage = () => {
           className="p-button-sm border-round-md"
           onClick={(e) => {
             e.stopPropagation();
-            setDetailPasien(rowData);
+            handleOpenDetailPasien(rowData);
           }}
           tooltip="Lihat Detail Profil Pasien"
           tooltipOptions={{ position: 'top' }}
@@ -350,6 +372,8 @@ const RegistrasiPasienPage = () => {
         <DataTable
           value={data}
           scrollable
+          tableStyle={{ minWidth: '1360px' }}
+          className="p-datatable-sm registrasi-pasien-table"
           lazy
           paginator
           first={first}
@@ -362,19 +386,19 @@ const RegistrasiPasienPage = () => {
           emptyMessage="Data Pasien Tidak Ditemukan"
           rowsPerPageOptions={[10, 25, 50]}
           rowHover
-          onRowClick={(e) => setDetailPasien(e.data as Pasien)}
+          onRowClick={(e) => handleOpenDetailPasien(e.data as Pasien)}
           style={{ cursor: 'pointer' }}
           paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
           currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data pasien"
         >
-          <Column field="no_rm" header="No. RM" body={noRmBodyTemplate} align="center" sortable style={{ minWidth: '8rem' }} />
-          <Column field="nama" header="Nama Pasien" className="font-bold text-900" sortable style={{ minWidth: '13rem' }} />
-          <Column field="nik" header="NIK" align="center" style={{ minWidth: '10rem' }} body={(r: Pasien) => r.nik || '-'} />
-          <Column field="no_hp" header="No. HP" align="center" style={{ minWidth: '10rem' }} body={(r: Pasien) => r.no_hp || '-'} />
-          <Column field="tanggal_lahir" header="Tgl Lahir" align="center" style={{ minWidth: '8rem' }} body={(r: Pasien) => formatDateOnly(r.tanggal_lahir)} />
-          <Column header="L/P" body={jenisKelaminBodyTemplate} align="center" style={{ minWidth: '7rem' }} />
-          <Column field="kota_kabupaten" header="Kota / Alamat" style={{ minWidth: '12rem' }} body={(r: Pasien) => r.kota_kabupaten || r.provinsi || '-'} />
-          <Column header="Aksi" body={actionBodyTemplate} align="center" style={{ minWidth: '7rem' }} />
+          <Column field="no_rm" header="No. RM" body={noRmBodyTemplate} align="center" sortable style={{ width: '140px', minWidth: '140px', whiteSpace: 'nowrap' }} />
+          <Column field="nama" header="Nama Pasien" className="font-bold text-900" sortable style={{ width: '220px', minWidth: '220px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span className="font-bold text-900" style={{ whiteSpace: 'nowrap', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.nama}</span>} />
+          <Column field="nik" header="NIK" align="center" style={{ width: '180px', minWidth: '180px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap' }}>{r.nik || '-'}</span>} />
+          <Column field="no_hp" header="No. HP" align="center" style={{ width: '150px', minWidth: '150px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap' }}>{r.no_hp || '-'}</span>} />
+          <Column field="tanggal_lahir" header="Tgl Lahir" align="center" style={{ width: '130px', minWidth: '130px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap' }}>{formatDateOnly(r.tanggal_lahir)}</span>} />
+          <Column header="L/P" body={jenisKelaminBodyTemplate} align="center" style={{ width: '120px', minWidth: '120px', whiteSpace: 'nowrap' }} />
+          <Column field="kota_kabupaten" header="Kota / Alamat" style={{ width: '320px', minWidth: '320px', whiteSpace: 'nowrap' }} body={(r: Pasien) => <span style={{ whiteSpace: 'nowrap', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.kota_kabupaten || r.provinsi || '-'}>{r.kota_kabupaten || r.provinsi || '-'}</span>} />
+          <Column header="Aksi" body={actionBodyTemplate} align="center" style={{ width: '110px', minWidth: '110px', whiteSpace: 'nowrap' }} />
         </DataTable>
       </div>
 
@@ -450,20 +474,57 @@ const RegistrasiPasienPage = () => {
         )}
       </Dialog>
 
-      {/* DIALOG DETAIL PASIEN (e-KTP PASIEN MODEL) */}
+      {/* DIALOG DETAIL PASIEN (e-KTP PASIEN MODEL & RIWAYAT KUNJUNGAN) */}
       <Dialog
         visible={Boolean(detailPasien)}
-        onHide={() => setDetailPasien(null)}
+        onHide={handleCloseDetailPasien}
         header={
-          <div className="flex align-items-center gap-2">
-            <i className="pi pi-id-card text-emerald-600 text-xl" />
-            <span className="font-bold text-base text-800">Kartu Identitas Pasien</span>
-          </div>
+          showRiwayat ? (
+            <div className="flex align-items-center justify-content-between w-full pr-3 flex-wrap gap-2">
+              <div className="flex align-items-center gap-2">
+                <i className="pi pi-history text-emerald-600 text-xl" />
+                <span className="font-bold text-base text-800">
+                  Kartu Identitas Pasien — Riwayat Kunjungan
+                </span>
+              </div>
+              <div className="flex align-items-center gap-3">
+                <span
+                  className="font-mono font-bold text-emerald-800 bg-emerald-100 border-1 border-emerald-300 border-round mr-2"
+                  style={{
+                    fontSize: '0.9rem',
+                    padding: '3px 10px',
+                    lineHeight: '1.2',
+                    marginRight: '10px',
+                  }}
+                >
+                  {detailPasien?.no_rm}
+                </span>
+                <span
+                  className="font-bold text-800 hidden sm:inline"
+                  style={{ fontSize: '0.95rem' }}
+                >
+                  {detailPasien?.nama}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex align-items-center gap-2">
+              <i className="pi pi-id-card text-emerald-600 text-xl" />
+              <span className="font-bold text-base text-800">Kartu Identitas Pasien</span>
+            </div>
+          )
         }
         modal
-        style={{ width: '100%', maxWidth: '660px' }}
-        breakpoints={{ '661px': '95vw' }}
-        contentClassName="p-3 surface-50"
+        style={{
+          width: '100%',
+          maxWidth: showRiwayat ? '1240px' : '660px',
+          height: showRiwayat ? '88vh' : 'auto',
+          maxHeight: '90vh',
+          transition: 'max-width 0.25s ease-in-out',
+        }}
+        breakpoints={{ '1280px': '96vw', '960px': '96vw', '641px': '98vw' }}
+        contentClassName={showRiwayat ? 'p-3 surface-50 overflow-hidden' : 'p-3 surface-50'}
+        contentStyle={showRiwayat ? { display: 'flex', flexDirection: 'column', height: '100%', flex: 1, minHeight: 0, overflow: 'hidden' } : {}}
         footer={
           <div className="flex justify-content-end align-items-center gap-2 pt-3 border-top-1 surface-border">
             <Button
@@ -473,7 +534,16 @@ const RegistrasiPasienPage = () => {
               severity="secondary"
               outlined
               className="text-xs font-medium"
-              onClick={() => setDetailPasien(null)}
+              onClick={handleCloseDetailPasien}
+            />
+            <Button
+              type="button"
+              label={showRiwayat ? 'Kartu Identitas' : 'Riwayat'}
+              icon={showRiwayat ? 'pi pi-id-card' : 'pi pi-history'}
+              severity="success"
+              outlined
+              className="font-medium text-xs px-3 py-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => setShowRiwayat((prev) => !prev)}
             />
             <Button
               type="button"
@@ -484,7 +554,7 @@ const RegistrasiPasienPage = () => {
               onClick={() => {
                 if (detailPasien) {
                   const target = detailPasien;
-                  setDetailPasien(null);
+                  handleCloseDetailPasien();
                   setPilihanKunjunganPasien(target);
                 }
               }}
@@ -492,7 +562,38 @@ const RegistrasiPasienPage = () => {
           </div>
         }
       >
-        {detailPasien && <PasienKtpCard pasien={detailPasien} />}
+        {detailPasien && !showRiwayat && <PasienKtpCard pasien={detailPasien} />}
+
+        {detailPasien && showRiwayat && (
+          <div
+            className="w-full flex-1 flex flex-column lg:flex-row gap-3 min-h-0 overflow-hidden"
+            style={{ height: '100%' }}
+          >
+            {/* PANEL KIRI: RIWAYAT TRANSAKSI */}
+            <div className="w-full lg:w-5/12 xl:w-4/12 h-full flex flex-column min-h-0 bg-white border-1 surface-border border-round-xl p-3 shadow-1 overflow-hidden">
+              <RiwayatKunjunganPanel
+                noRm={detailPasien.no_rm}
+                namaPasien={detailPasien.nama}
+                selectedKunjungan={selectedKunjungan}
+                onSelectKunjungan={setSelectedKunjungan}
+                onDataLoaded={(data) => {
+                  setRiwayatData(data);
+                  if (data.length > 0 && !selectedKunjungan) {
+                    setSelectedKunjungan(data[0]);
+                  }
+                }}
+              />
+            </div>
+
+            {/* PANEL KANAN: DETAIL KUNJUNGAN */}
+            <div className="w-full lg:w-7/12 xl:w-8/12 h-full flex flex-column min-h-0 overflow-hidden">
+              <KunjunganDetailCard
+                selectedKunjungan={selectedKunjungan}
+                allRiwayat={riwayatData}
+              />
+            </div>
+          </div>
+        )}
       </Dialog>
 
       {/* POPUP PILIH JENIS PENDAFTARAN (DAFTAR SEKARANG VS BOOKING JADWAL) */}
@@ -647,6 +748,21 @@ const RegistrasiPasienPage = () => {
           </div>
         </div>
       </Dialog>
+
+      <style jsx global>{`
+        .registrasi-pasien-table .p-datatable-tbody > tr > td {
+          white-space: nowrap !important;
+          height: 52px !important;
+          box-sizing: border-box !important;
+          vertical-align: middle !important;
+        }
+        .registrasi-pasien-table .p-datatable-thead > tr > th {
+          white-space: nowrap !important;
+          height: 48px !important;
+          box-sizing: border-box !important;
+          vertical-align: middle !important;
+        }
+      `}</style>
     </div>
   );
 };

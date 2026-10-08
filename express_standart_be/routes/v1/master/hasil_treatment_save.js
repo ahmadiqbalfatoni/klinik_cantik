@@ -13,7 +13,7 @@
 import express from "express";
 import DB from "../../../core/config/knex.js";
 import { formatDateSystem } from "../components/tools/date_tools.js";
-import { Logging } from "../components/tools/servertool.js";
+import { Logging, ChangesLog } from "../components/tools/servertool.js";
 import { status } from "../components/tools/general.js";
 import { syncRekamMedisPerAntrian, saveBase64ImageFile } from "./ruangan/rekam_medis_service.js";
 import { syncCompletedItemsToKasirDraft } from "./kasir/kasir_sync_service.js";
@@ -46,6 +46,32 @@ const handleHasilTreatmentSave = async (req, res) => {
   }
 
   const produkItems = Array.isArray(produk_items) ? produk_items : [];
+
+  const userRole = (req?.auth?.role || "").toLowerCase();
+  const AUTHORIZED_OVERRIDE_ROLES = [
+    "owner",
+    "manager",
+    "superadmin",
+    "admin",
+    "dokter",
+    "kasir",
+    "supervisor",
+    "apoteker",
+    "dev",
+  ];
+
+  // Validasi otorisasi jika ada produk yang meminta override kadaluarsa
+  const hasOverrideRequest = produkItems.some((p) => p.produk_expired_override || p.is_expired_override);
+  if (hasOverrideRequest) {
+    const isAuthorized = userRole && AUTHORIZED_OVERRIDE_ROLES.includes(userRole);
+    if (!isAuthorized) {
+      return res.status(403).json({
+        status: status.GAGAL || "01",
+        message: "Akses ditolak: Anda tidak memiliki otorisasi (role) untuk melakukan override produk kadaluarsa.",
+        datetime: formatDateSystem(),
+      });
+    }
+  }
 
   try {
     let createdTransaksiKode = "";
@@ -139,6 +165,21 @@ const handleHasilTreatmentSave = async (req, res) => {
       if (syncResult) {
         createdTransaksiKode = syncResult.kode_transaksi;
         grandTotal = syncResult.total_bayar;
+      }
+
+      // ─── AUDIT TRAIL: OVERRIDE PRODUK KADALUARSA SAAT TINDAKAN ───
+      const expiredOverrides = produkItems.filter((p) => p.produk_expired_override || p.is_expired_override);
+      if (expiredOverrides.length > 0) {
+        await ChangesLog({
+          description: `Override Produk Kadaluarsa Tindakan: ${expiredOverrides.map((p) => `${p.nama || p.kode_produk} (${p.catatan_override || 'Disetujui petugas/dokter'})`).join(", ")} pada kunjungan ${kode_kunjungan}`,
+          tableName: "trx_antrian_layanan",
+          referenceCode: resolvedKodeAntrian || kode_kunjungan,
+          action: "UPDATE",
+          dataBefore: null,
+          dataAfter: { expired_overrides: expiredOverrides },
+          user: username,
+          tz: tz || "Asia/Jakarta"
+        }, trx);
       }
 
 

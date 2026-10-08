@@ -14,9 +14,10 @@ import { Divider } from 'primereact/divider';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
-import { showError, showSuccess } from '@/lib/tools/generalTools';
+import { showError, showSuccess, openWhatsAppChat } from '@/lib/tools/generalTools';
 import { PasienFormDialog } from '@/app/(main)/pendaftaran-antrean/pendaftaran-pasien/components/dialogs/PasienFormDialog';
 import { useRouter } from 'next/navigation';
+import KeteranganStatus from '@/app/components/KeteranganStatus';
 import { PasienKtpCard, Pasien } from '@/app/(main)/pendaftaran-antrean/components/PasienKtpCard';
 import { DialogPilihanKunjungan } from '@/app/(main)/pendaftaran-antrean/components/DialogPilihanKunjungan';
 
@@ -220,7 +221,6 @@ export default function DataPasienPage() {
                 submitLabel="Simpan Perubahan"
                 toast={toast}
                 onSuccess={() => {
-                    showSuccess(toast, 'Data pasien berhasil diperbarui');
                     loadData();
                 }}
             />
@@ -327,6 +327,8 @@ export default function DataPasienPage() {
                 <DataTable
                     value={data}
                     loading={loading}
+                    scrollable
+                    tableStyle={{ minWidth: '1360px' }}
                     paginator
                     rows={rows}
                     totalRecords={totalRecords}
@@ -339,9 +341,8 @@ export default function DataPasienPage() {
                     selection={selectedRows}
                     onSelectionChange={(e) => setSelectedRows(e.value as any[])}
                     dataKey="no_rm"
-                    className="p-datatable-sm"
+                    className="p-datatable-sm data-pasien-table"
                     emptyMessage="Data pasien tidak ditemukan."
-                    responsiveLayout="scroll"
                     rowsPerPageOptions={[10, 25, 50]}
                     paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                     currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data"
@@ -397,39 +398,7 @@ export default function DataPasienPage() {
                                 </div>
                             </div>
 
-                            {/* Standard Status Legend Bar */}
-                            <div className="flex flex-wrap align-items-center gap-3 px-2 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
-                                <span className="flex align-items-center gap-1">
-                                    <i className="pi pi-info-circle" />
-                                    <span className="font-semibold">KETERANGAN STATUS:</span>
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span
-                                        style={{
-                                            display: 'inline-block',
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '3px',
-                                            backgroundColor: '#22c55e',
-                                            boxShadow: '0 1px 3px #22c55e55'
-                                        }}
-                                    />
-                                    Aktif
-                                </span>
-                                <span className="flex align-items-center gap-1">
-                                    <span
-                                        style={{
-                                            display: 'inline-block',
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '3px',
-                                            backgroundColor: '#ef4444',
-                                            boxShadow: '0 1px 3px #ef444455'
-                                        }}
-                                    />
-                                    Tidak Aktif
-                                </span>
-                            </div>
+                            <KeteranganStatus className="mb-2" />
                         </div>
                     }
                 >
@@ -438,8 +407,8 @@ export default function DataPasienPage() {
 
                     {/* Kolom Indikator Status */}
                     <Column
-                        header="Status"
-                        headerStyle={{ width: '4rem', textAlign: 'center' }}
+                        header=""
+                        headerStyle={{ width: '3rem', textAlign: 'center' }}
                         bodyStyle={{ textAlign: 'center' }}
                         body={(rowData) => {
                             const isAktif = rowData.status === 'aktif';
@@ -516,24 +485,36 @@ export default function DataPasienPage() {
                         field="no_hp"
                         header="No. HP"
                         style={{ minWidth: '10rem' }}
-                        body={(rowData) => (
-                            <div className="flex flex-column">
-                                <a
-                                    href={`https://wa.me/${rowData.no_hp?.replace(/^0/, '62')}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="font-semibold text-green-700 text-xs flex align-items-center gap-1 hover:underline"
-                                >
-                                    <i className="pi pi-whatsapp text-green-600" />
-                                    {rowData.no_hp || '-'}
-                                </a>
-                                {rowData.email && (
-                                    <span className="text-500 text-xs mt-1 truncate" style={{ maxWidth: '140px' }} title={rowData.email}>
-                                        {rowData.email}
-                                    </span>
-                                )}
-                            </div>
-                        )}
+                        body={(rowData) => {
+                            const hasPhone = Boolean(rowData.no_hp && rowData.no_hp.trim() !== '-');
+
+                            return (
+                                <div className="flex flex-column">
+                                    {hasPhone ? (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                openWhatsAppChat(rowData.no_hp);
+                                            }}
+                                            className="p-0 m-0 bg-transparent border-none text-left font-semibold text-green-700 text-xs flex align-items-center gap-1 hover:underline cursor-pointer"
+                                            title="Buka Chat WhatsApp (Aplikasi / Web)"
+                                        >
+                                            <i className="pi pi-whatsapp text-green-600" />
+                                            {rowData.no_hp}
+                                        </button>
+                                    ) : (
+                                        <span className="text-500 text-xs">-</span>
+                                    )}
+                                    {rowData.email && (
+                                        <span className="text-500 text-xs mt-1 truncate" style={{ maxWidth: '140px' }} title={rowData.email}>
+                                            {rowData.email}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        }}
                     />
 
                     {/* Kolom Wilayah / Alamat */}
@@ -621,6 +602,21 @@ export default function DataPasienPage() {
                     />
                 </DataTable>
             </div>
+
+            <style jsx global>{`
+                .data-pasien-table .p-datatable-tbody > tr > td {
+                    white-space: nowrap !important;
+                    height: 52px !important;
+                    box-sizing: border-box !important;
+                    vertical-align: middle !important;
+                }
+                .data-pasien-table .p-datatable-thead > tr > th {
+                    white-space: nowrap !important;
+                    height: 48px !important;
+                    box-sizing: border-box !important;
+                    vertical-align: middle !important;
+                }
+            `}</style>
         </div>
     );
 }

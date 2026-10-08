@@ -37,6 +37,8 @@ const DashboardPage: React.FC = () => {
       const res = await postData('/master/dashboard/role-data', {
         role: userRole,
         kode_cabang: session?.user?.kode_cabang || null,
+        user_code: (session?.user as any)?.user_code || null,
+        username: session?.user?.username || (session?.user as any)?.email || null,
       });
       if (['00', '0000'].includes(res?.data?.status)) {
         setDashboardData(res.data.data || {});
