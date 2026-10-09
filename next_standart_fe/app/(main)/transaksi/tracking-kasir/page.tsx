@@ -1458,9 +1458,13 @@ export default function TrackingKasKasirPage() {
               <Column
                 field="kode_mutasi"
                 header="Kode Mutasi"
-                style={{ minWidth: '9.5rem' }}
+                headerStyle={{ minWidth: '13.5rem', whiteSpace: 'nowrap' }}
+                style={{ minWidth: '13.5rem', whiteSpace: 'nowrap' }}
                 body={(m: MutasiRecord) => (
-                  <span className="font-mono text-xs text-teal-800 font-bold bg-teal-50 px-2 py-1 border-round border-1 border-teal-200">
+                  <span
+                    className="font-mono text-xs text-teal-800 font-bold bg-teal-50 px-2 py-1 border-round border-1 border-teal-200 inline-block"
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
                     {m.kode_mutasi}
                   </span>
                 )}
@@ -1469,10 +1473,12 @@ export default function TrackingKasKasirPage() {
               <Column
                 field="kode_shift"
                 header="Shift Kasir"
-                style={{ minWidth: '9.5rem' }}
+                headerStyle={{ minWidth: '12rem', whiteSpace: 'nowrap' }}
+                style={{ minWidth: '12rem', whiteSpace: 'nowrap' }}
                 body={(m: MutasiRecord) => (
                   <span
-                    className="font-mono text-xs text-purple-700 font-semibold cursor-pointer hover:underline"
+                    className="font-mono text-xs text-purple-700 font-semibold cursor-pointer hover:underline inline-block"
+                    style={{ whiteSpace: 'nowrap' }}
                     onClick={() => {
                       const sh = data.find((d) => d.kode_shift === m.kode_shift);
                       if (sh) handleOpenDetail(sh);

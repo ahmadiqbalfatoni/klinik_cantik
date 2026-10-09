@@ -1941,21 +1941,7 @@ const JadwalKaryawanContent = () => {
                                     );
                                 }}
                             />
-                            <Column
-                                field="status"
-                                header="Status"
-                                align="center"
-                                sortable
-                                headerStyle={{ fontWeight: 'bold', minWidth: '7.5rem' }}
-                                style={{ minWidth: '7.5rem' }}
-                                body={(item) => (
-                                    <Tag
-                                        severity={item.status === 'aktif' ? 'success' : 'danger'}
-                                        value={item.status === 'aktif' ? 'Aktif' : 'Tidak Aktif'}
-                                        className="text-xs px-2.5 py-1 font-semibold"
-                                    />
-                                )}
-                            />
+
                             <Column
                                 header="Aksi"
                                 align="center"
