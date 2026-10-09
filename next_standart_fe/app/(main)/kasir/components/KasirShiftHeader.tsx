@@ -266,32 +266,75 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
 
       {/* ── BAR SESI SHIFT KASIR ── */}
       {(!isKasirRole || scheduleAllowed) && (
-        <div className="px-3.5 py-2.5 border-round-xl surface-card shadow-1 border-1 surface-border flex align-items-center justify-content-between">
+        <div
+          className="surface-card border-round-xl shadow-1 border-1 surface-border"
+          style={{
+            padding: '12px 18px',
+            boxSizing: 'border-box',
+            width: '100%',
+          }}
+        >
           {/* Kondisi 1: Shift Belum Dibuka */}
           {!activeShift && (
-            <div className="flex flex-wrap align-items-center justify-content-between w-full gap-3">
-              <div className="flex align-items-center gap-3">
-                <div className="w-2.5rem h-2.5rem border-round-xl bg-amber-50 border-1 border-amber-200 flex align-items-center justify-content-center text-amber-600 flex-shrink-0 shadow-xs">
-                  <i className="pi pi-calendar-times text-lg" />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+                width: '100%',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    backgroundColor: '#fef3c7',
+                    border: '1px solid #fde68a',
+                    color: '#d97706',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <i className="pi pi-calendar-times" style={{ fontSize: '18px' }} />
                 </div>
                 <div>
-                  <div className="font-bold text-900 text-sm flex align-items-center gap-2">
-                    <span>Sesi Shift Kasir Belum Dibuka</span>
-                    <Tag severity="warning" value="Shift Belum Aktif" className="text-[10px] px-2 py-0.5 border-round-md font-semibold" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
+                      Sesi Shift Kasir Belum Dibuka
+                    </span>
+                    <span
+                      style={{
+                        backgroundColor: '#fef3c7',
+                        color: '#b45309',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                      }}
+                    >
+                      Shift Belum Aktif
+                    </span>
                   </div>
-                  <div className="text-500 text-xs mt-1">
-                    Kasir: <strong className="text-700">{scheduleInfo?.karyawan?.nama || session?.user?.name || 'Kasir'}</strong>. Buka sesi shift dengan modal kas awal untuk mulai bertransaksi.
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    Kasir: <strong style={{ color: '#334155' }}>{scheduleInfo?.karyawan?.nama || session?.user?.name || 'Kasir'}</strong>. Buka sesi shift dengan modal kas awal untuk mulai bertransaksi.
                   </div>
                 </div>
               </div>
 
-              <div className="flex align-items-center gap-2 ml-auto">
+              <div style={{ marginLeft: 'auto' }}>
                 <Button
                   label="Buka Sesi Shift Kasir"
                   icon="pi pi-lock-open"
                   severity="success"
                   size="small"
-                  className="border-round-lg font-bold text-xs px-3.5 py-2 shadow-1"
+                  className="border-round-lg font-bold text-xs px-3.5 py-2 shadow-1 bg-teal-600 border-teal-600"
+                  style={{ whiteSpace: 'nowrap' }}
                   onClick={() => {
                     setModalAwalInput(200000);
                     setCatatanBukaInput('');
@@ -304,81 +347,225 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
 
           {/* Kondisi 2: Shift Sedang Aktif (OPEN) */}
           {activeShift && (
-            <div className="flex flex-wrap lg:flex-nowrap align-items-center justify-content-between w-full gap-2.5">
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+                width: '100%',
+                flexWrap: 'wrap',
+              }}
+            >
               {/* 1. Identitas Sesi Shift & Kasir */}
-              <div className="flex align-items-center gap-2.5 pr-0 lg:pr-3 lg:border-right-1 surface-border flex-shrink-0">
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  flexShrink: 0,
+                  paddingRight: '16px',
+                  borderRight: '1px solid #e2e8f0',
+                }}
+              >
                 <div
-                  className="w-2.5rem h-2.5rem border-round-xl flex align-items-center justify-content-center flex-shrink-0 shadow-xs"
                   style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
                     background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
-                    color: 'white',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 6px rgba(13, 148, 136, 0.25)',
                   }}
                 >
-                  <i className="pi pi-wallet text-base" />
+                  <i className="pi pi-wallet" style={{ fontSize: '18px' }} />
                 </div>
-                <div>
-                  <div className="font-bold text-teal-900 text-sm flex align-items-center gap-2">
-                    <span className="w-2 h-2 border-round-circle bg-green-500 inline-block animate-pulse" />
-                    <span className="font-mono tracking-tight font-extrabold">{activeShift.kode_shift}</span>
-                    <Tag severity="success" value="Sedang Aktif" className="text-[10px] px-1.5 py-0.5 font-semibold border-round-md" />
-                  </div>
-                  <div className="text-600 text-xs mt-0.5 flex align-items-center gap-1.5">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span
-                      className="text-truncate"
-                      style={{ maxWidth: '140px', verticalAlign: 'bottom' }}
-                      title={activeShift.nama_kasir}
+                      style={{
+                        fontFamily: 'monospace',
+                        fontWeight: 800,
+                        fontSize: '14px',
+                        color: '#0f766e',
+                        letterSpacing: '-0.02em',
+                      }}
                     >
-                      Kasir: <strong className="text-800">{activeShift.nama_kasir}</strong>
+                      {activeShift.kode_shift}
                     </span>
-                    <span className="text-300">•</span>
-                    <span className="text-500 flex align-items-center gap-1 white-space-nowrap">
-                      <i className="pi pi-clock text-[10px] text-400" /> Buka: <strong className="text-700">{activeShift.waktu_buka ? format(new Date(activeShift.waktu_buka), 'HH:mm') : '-'} WIB</strong>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        backgroundColor: '#dcfce7',
+                        color: '#15803d',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: '#22c55e',
+                          display: 'inline-block',
+                        }}
+                      />
+                      Sedang Aktif
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '11px',
+                      color: '#64748b',
+                    }}
+                  >
+                    <span>
+                      Kasir: <strong style={{ color: '#1e293b' }}>{activeShift.nama_kasir}</strong>
+                    </span>
+                    <span style={{ color: '#cbd5e1' }}>•</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
+                      <i className="pi pi-clock" style={{ fontSize: '10px', color: '#94a3b8' }} />
+                      Buka: <strong style={{ color: '#334155' }}>{activeShift.waktu_buka ? format(new Date(activeShift.waktu_buka), 'HH:mm') : '-'} WIB</strong>
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* 2. Ringkasan Kas Cepat */}
-              <div className="flex align-items-center gap-2 flex-wrap sm:flex-nowrap">
-                <div className="px-2.5 py-1.5 border-round-lg bg-surface-50 border-1 surface-border flex flex-column justify-content-center min-w-max">
-                  <span className="text-500 text-[10px] font-semibold uppercase tracking-wider block mb-0.5">Modal Awal</span>
-                  <strong className="text-slate-800 text-xs font-bold font-mono leading-tight">{formatRupiah(activeShift.modal_awal)}</strong>
-                </div>
-                <div className="px-2.5 py-1.5 border-round-lg bg-green-50 border-1 border-green-200 flex flex-column justify-content-center min-w-max">
-                  <span className="text-green-700 text-[10px] font-semibold uppercase tracking-wider block mb-0.5">Tunai Masuk</span>
-                  <strong className="text-green-700 text-xs font-bold font-mono leading-tight">+{formatRupiah(activeShift.total_penjualan_tunai)}</strong>
-                </div>
-                {parseFloat(activeShift.total_kas_keluar || 0) > 0 && (
-                  <div className="px-2.5 py-1.5 border-round-lg bg-red-50 border-1 border-red-200 flex flex-column justify-content-center min-w-max">
-                    <span className="text-red-700 text-[10px] font-semibold uppercase tracking-wider block mb-0.5">Kas Keluar</span>
-                    <strong className="text-red-700 text-xs font-bold font-mono leading-tight">-{formatRupiah(activeShift.total_kas_keluar)}</strong>
-                  </div>
-                )}
-                {/* Highlight Utama: Kas Fisik Laci */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  flexWrap: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {/* Modal Awal */}
                 <div
-                  className="px-3 py-1.5 border-round-lg flex flex-column justify-content-center min-w-max shadow-xs"
                   style={{
-                    backgroundColor: '#f0fdfa',
-                    border: '1.5px solid #0d9488',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    minWidth: '110px',
+                    boxSizing: 'border-box',
                   }}
                 >
-                  <div className="flex align-items-center gap-1.5 mb-0.5">
-                    <span className="w-1.5 h-1.5 border-round-circle bg-teal-600 inline-block" />
-                    <span className="text-teal-900 text-[10px] font-extrabold uppercase tracking-wider">Kas Fisik Laci</span>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Modal Awal
+                  </span>
+                  <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#334155', marginTop: '2px' }}>
+                    {formatRupiah(activeShift.modal_awal)}
+                  </span>
+                </div>
+
+                {/* Tunai Masuk */}
+                <div
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    minWidth: '110px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Tunai Masuk
+                  </span>
+                  <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#16a34a', marginTop: '2px' }}>
+                    +{formatRupiah(activeShift.total_penjualan_tunai)}
+                  </span>
+                </div>
+
+                {/* Kas Keluar (Jika ada) */}
+                {parseFloat(activeShift.total_kas_keluar || 0) > 0 && (
+                  <div
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '8px',
+                      backgroundColor: '#fff1f2',
+                      border: '1px solid #fecdd3',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      minWidth: '110px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#be123c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Kas Keluar
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#e11d48', marginTop: '2px' }}>
+                      -{formatRupiah(activeShift.total_kas_keluar)}
+                    </span>
                   </div>
-                  <strong className="text-teal-950 text-sm font-black font-mono leading-tight">{formatRupiah(activeShift.kas_diharapkan)}</strong>
+                )}
+
+                {/* Highlight Utama: Kas Fisik Laci */}
+                <div
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '8px',
+                    backgroundColor: '#f0fdfa',
+                    border: '1.5px solid #0d9488',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    minWidth: '130px',
+                    boxSizing: 'border-box',
+                    boxShadow: '0 1px 3px rgba(13, 148, 136, 0.12)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#0d9488', display: 'inline-block' }} />
+                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#0f766e', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Kas Fisik Laci
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '13px', fontWeight: 900, fontFamily: 'monospace', color: '#115e59', marginTop: '2px' }}>
+                    {formatRupiah(activeShift.kas_diharapkan)}
+                  </span>
                 </div>
               </div>
 
               {/* 3. Action Buttons Sesi */}
-              <div className="flex align-items-center gap-2 ml-auto sm:ml-0 flex-shrink-0">
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginLeft: 'auto',
+                  flexShrink: 0,
+                }}
+              >
                 <Button
                   label="Catat Kas"
                   icon="pi pi-plus-circle"
                   outlined
                   severity="secondary"
                   size="small"
-                  className="border-round-lg text-xs font-bold px-2.5 py-2 text-700 hover:text-900 border-300 hover:surface-100 transition-all"
+                  className="border-round-lg text-xs font-bold px-3 py-2 text-700 hover:text-900 border-300"
+                  style={{ whiteSpace: 'nowrap' }}
                   onClick={() => {
                     setMutasiTipe('kas_keluar');
                     setMutasiKategori('Pengeluaran Operasional Kasir');
@@ -395,7 +582,8 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                   outlined
                   severity="secondary"
                   size="small"
-                  className="border-round-lg text-xs font-bold px-2.5 py-2 text-700 hover:text-900 border-300 hover:surface-100 transition-all"
+                  className="border-round-lg text-xs font-bold px-3 py-2 text-700 hover:text-900 border-300"
+                  style={{ whiteSpace: 'nowrap' }}
                   onClick={() => {
                     loadActiveShift();
                     setShowRiwayatModal(true);
@@ -408,7 +596,8 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                   icon="pi pi-lock"
                   severity="danger"
                   size="small"
-                  className="border-round-lg font-bold text-xs px-3 py-2 shadow-1 bg-red-600 border-red-600 hover:bg-red-700 transition-all"
+                  className="border-round-lg font-bold text-xs px-3.5 py-2 shadow-1 bg-red-600 border-red-600 hover:bg-red-700"
+                  style={{ whiteSpace: 'nowrap' }}
                   onClick={() => {
                     setKasAktualInput(parseFloat(activeShift.kas_diharapkan || 0));
                     setCatatanTutupInput('');
