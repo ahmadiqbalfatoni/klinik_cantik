@@ -813,30 +813,18 @@ export default function TrackingKasKasirPage() {
         </div>
 
         {/* =========================================================
-            6 KPI CARDS STRIP (Standard Modern Design seperti Inventori)
+            3 KPI CARDS STRIP UTAMA (Ringkas, Rapi & Lega)
             ========================================================= */}
         <div className="grid m-0 mb-4">
-          {/* 1. Total Modal Awal */}
-          <div className="col-12 sm:col-6 lg:col-2 p-1">
-            <div className="p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full">
-              <div>
-                <span className="text-xs text-500 font-semibold uppercase block mb-1">Total Modal Awal</span>
-                <span className="text-2xl font-bold text-900">{formatRupiah(summary.total_modal_awal)}</span>
-                <span className="text-xs text-500 block mt-1">{summary.total_shift || 0} Sesi Shift</span>
-              </div>
-              <div className="w-3rem h-3rem border-round-lg bg-blue-100 flex align-items-center justify-content-center text-blue-700 flex-shrink-0">
-                <i className="pi pi-briefcase text-xl" />
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Kas Masuk Tunai */}
-          <div className="col-12 sm:col-6 lg:col-2 p-1">
-            <div className="p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full">
+          {/* 1. Kas Masuk (Tunai) */}
+          <div className="col-12 md:col-4 p-2">
+            <div className="p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full hover:shadow-1 transition-shadow">
               <div>
                 <span className="text-xs text-500 font-semibold uppercase block mb-1">Kas Masuk (Tunai)</span>
-                <span className="text-2xl font-bold text-green-600">+{formatRupiah(summary.total_penjualan_tunai)}</span>
-                <span className="text-xs text-500 block mt-1">+ Lain: {formatRupiah(summary.total_kas_masuk_lain)}</span>
+                <span className="text-2xl font-bold text-green-600 block">+{formatRupiah(summary.total_penjualan_tunai)}</span>
+                <span className="text-xs text-500 block mt-1">
+                  Modal Awal: {formatRupiah(summary.total_modal_awal)} ({summary.total_shift || 0} Shift)
+                </span>
               </div>
               <div className="w-3rem h-3rem border-round-lg bg-green-100 flex align-items-center justify-content-center text-green-700 flex-shrink-0">
                 <i className="pi pi-arrow-down-left text-xl" />
@@ -844,13 +832,15 @@ export default function TrackingKasKasirPage() {
             </div>
           </div>
 
-          {/* 3. Total Kas Keluar */}
-          <div className="col-12 sm:col-6 lg:col-2 p-1">
-            <div className="p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full">
+          {/* 2. Total Kas Keluar */}
+          <div className="col-12 md:col-4 p-2">
+            <div className="p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full hover:shadow-1 transition-shadow">
               <div>
                 <span className="text-xs text-500 font-semibold uppercase block mb-1">Total Kas Keluar</span>
-                <span className="text-2xl font-bold text-red-600">-{formatRupiah(summary.total_kas_keluar)}</span>
-                <span className="text-xs text-500 block mt-1">Pengeluaran &amp; Petugas</span>
+                <span className="text-2xl font-bold text-red-600 block">-{formatRupiah(summary.total_kas_keluar)}</span>
+                <span className="text-xs text-500 block mt-1">
+                  Biaya Operasional &amp; Pengeluaran Petugas
+                </span>
               </div>
               <div className="w-3rem h-3rem border-round-lg bg-red-100 flex align-items-center justify-content-center text-red-700 flex-shrink-0">
                 <i className="pi pi-arrow-up-right text-xl" />
@@ -858,74 +848,18 @@ export default function TrackingKasKasirPage() {
             </div>
           </div>
 
-          {/* 4. Penjualan Non-Tunai */}
-          <div className="col-12 sm:col-6 lg:col-2 p-1">
-            <div className="p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full">
-              <div>
-                <span className="text-xs text-500 font-semibold uppercase block mb-1">Non-Tunai</span>
-                <span className="text-2xl font-bold text-purple-600">{formatRupiah(summary.total_penjualan_nontunai)}</span>
-                <span className="text-xs text-purple-600 block mt-1">QRIS / EDC / Transfer</span>
-              </div>
-              <div className="w-3rem h-3rem border-round-lg bg-purple-100 flex align-items-center justify-content-center text-purple-700 flex-shrink-0">
-                <i className="pi pi-credit-card text-xl" />
-              </div>
-            </div>
-          </div>
-
-          {/* 5. Ekspektasi Kas Laci (Featured Tinted Card seperti Inventori) */}
-          <div className="col-12 sm:col-6 lg:col-2 p-1">
-            <div className="p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full bg-teal-50">
+          {/* 3. Ekspektasi Kas Laci (Saldo Kas Seharusnya) */}
+          <div className="col-12 md:col-4 p-2">
+            <div className="p-3 border-round-xl border-1 border-teal-200 flex align-items-center justify-content-between h-full bg-teal-50 hover:shadow-1 transition-shadow">
               <div>
                 <span className="text-xs text-teal-800 font-semibold uppercase block mb-1">Ekspektasi Kas Laci</span>
-                <span className="text-2xl font-black text-teal-900">{formatRupiah(summary.total_kas_diharapkan)}</span>
-                <span className="text-xs text-teal-700 block mt-1">Saldo Kas Seharusnya</span>
+                <span className="text-2xl font-black text-teal-900 block">{formatRupiah(summary.total_kas_diharapkan)}</span>
+                <span className="text-xs text-teal-700 block mt-1 font-medium">
+                  Selisih: {summary.total_selisih === 0 ? 'Rp 0 (Pas)' : (summary.total_selisih > 0 ? '+' : '') + formatRupiah(summary.total_selisih)} • {summary.total_shift_open || 0} Buka / {summary.total_shift_closed || 0} Tutup
+                </span>
               </div>
               <div className="w-3rem h-3rem border-round-lg bg-teal-100 flex align-items-center justify-content-center text-teal-700 flex-shrink-0">
                 <i className="pi pi-wallet text-xl" />
-              </div>
-            </div>
-          </div>
-
-          {/* 6. Total Selisih Kas */}
-          <div className="col-12 sm:col-6 lg:col-2 p-1">
-            <div
-              className={`p-3 border-round-xl surface-ground border-1 border-200 flex align-items-center justify-content-between h-full ${
-                summary.total_selisih === 0
-                  ? ''
-                  : summary.total_selisih > 0
-                  ? 'bg-blue-50 border-blue-200'
-                  : 'bg-orange-50 border-orange-200'
-              }`}
-            >
-              <div>
-                <span className="text-xs text-500 font-semibold uppercase block mb-1">Total Selisih Kas</span>
-                <span
-                  className={`text-2xl font-bold ${
-                    summary.total_selisih === 0
-                      ? 'text-900'
-                      : summary.total_selisih > 0
-                      ? 'text-blue-600'
-                      : 'text-orange-600'
-                  }`}
-                >
-                  {summary.total_selisih === 0
-                    ? 'Rp 0 (Pas)'
-                    : (summary.total_selisih > 0 ? '+' : '') + formatRupiah(summary.total_selisih)}
-                </span>
-                <span className="text-xs text-500 block mt-1">
-                  {summary.total_shift_open || 0} Buka / {summary.total_shift_closed || 0} Tutup
-                </span>
-              </div>
-              <div
-                className={`w-3rem h-3rem border-round-lg flex align-items-center justify-content-center flex-shrink-0 ${
-                  summary.total_selisih === 0
-                    ? 'bg-slate-100 text-slate-700'
-                    : summary.total_selisih > 0
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-orange-100 text-orange-700'
-                }`}
-              >
-                <i className="pi pi-sliders-h text-xl" />
               </div>
             </div>
           </div>
