@@ -28,6 +28,7 @@ interface KasirSidebarProps {
   onSelectTrx: (kode: string) => void;
   onNewTrx: () => void;
   onListChange: (list: TransaksiListItem[]) => void;
+  isShiftOpen?: boolean;
 }
 
 const formatRupiah = (val: number) =>
@@ -40,6 +41,7 @@ export const KasirSidebar: React.FC<KasirSidebarProps> = ({
   onSelectTrx,
   onNewTrx,
   onListChange,
+  isShiftOpen = true,
 }) => {
   const [list, setList] = useState<TransaksiListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -120,6 +122,7 @@ export const KasirSidebar: React.FC<KasirSidebarProps> = ({
             label="Baru"
             severity="success"
             size="small"
+            disabled={!isShiftOpen}
             onClick={onNewTrx}
             className="font-bold text-xs bg-teal-600 border-none border-round-lg px-3 text-white shadow-1"
           />

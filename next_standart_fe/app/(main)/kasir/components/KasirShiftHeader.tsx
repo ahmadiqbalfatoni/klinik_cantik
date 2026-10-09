@@ -68,6 +68,16 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
     onShiftStateChangeRef.current = onShiftStateChange;
   }, [onShiftStateChange]);
 
+  useEffect(() => {
+    const handleTriggerOpen = () => {
+      setModalAwalInput(200000);
+      setCatatanBukaInput('');
+      setShowBukaModal(true);
+    };
+    window.addEventListener('trigger-open-shift-modal', handleTriggerOpen);
+    return () => window.removeEventListener('trigger-open-shift-modal', handleTriggerOpen);
+  }, []);
+
   const formatRupiah = (val: number | string | null | undefined) => {
     const num = parseFloat(String(val || 0));
     return `Rp ${num.toLocaleString('id-ID')}`;

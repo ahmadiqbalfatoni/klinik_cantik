@@ -66,6 +66,26 @@ router.post("/", async (req, res) => {
     const kembalian = metode_bayar === "tunai" ? Math.max(0, nominalBayar - tagihanPelunasan) : 0;
     const trxBranch = existing.kode_cabang || branchCode || "CBG-001";
 
+    // 0. Validasi Sesi Shift Kasir Aktif - Transaksi pembayaran WAJIB dalam sesi shift yang aktif (status 'open')
+    const userCode = req?.auth?.user_code || "";
+    const activeShift = await trx("trx_kasir_shift")
+      .where(function () {
+        if (userCode) this.where("user_code", userCode);
+        else this.where("created_by", username);
+      })
+      .where("status", "open")
+      .forUpdate()
+      .first();
+
+    if (!activeShift) {
+      await trx.rollback();
+      return res.status(400).json({
+        status: status.BAD_REQUEST,
+        message: "Sesi shift kasir belum dibuka. Anda harus membuka sesi shift kasir terlebih dahulu sebelum menyelesaikan pembayaran transaksi.",
+        datetime: formatDateSystem(),
+      });
+    }
+
     // 1. Eksekusi pemotongan stok FEFO untuk semua item produk fisik pada transaksi
     const detailItems = await trx("trx_detail_transaksi")
       .where("kode_transaksi", kode_transaksi)
@@ -96,64 +116,52 @@ router.post("/", async (req, res) => {
       updated_at: DB.fn.now(),
     });
 
-    // 2b. Integrasi Sesi Shift Kasir: Catat ke shift aktif kasir jika ada
+    // 2b. Integrasi Sesi Shift Kasir: Catat ke shift aktif kasir
     try {
-      const userCode = req?.auth?.user_code || "";
-      const activeShift = await trx("trx_kasir_shift")
-        .where(function () {
-          if (userCode) this.where("user_code", userCode);
-          else this.where("created_by", username);
-        })
-        .where("status", "open")
-        .forUpdate()
-        .first();
+      const nowWib = formatDateSystem();
+      const payNominal = tagihanPelunasan > 0 ? tagihanPelunasan : totalBayar;
 
-      if (activeShift) {
-        const nowWib = formatDateSystem();
-        const payNominal = tagihanPelunasan > 0 ? tagihanPelunasan : totalBayar;
+      if (metode_bayar === "tunai") {
+        const newTunai = parseFloat(activeShift.total_penjualan_tunai || 0) + payNominal;
+        const newKasDiharapkan = parseFloat(activeShift.kas_diharapkan || 0) + payNominal;
 
-        if (metode_bayar === "tunai") {
-          const newTunai = parseFloat(activeShift.total_penjualan_tunai || 0) + payNominal;
-          const newKasDiharapkan = parseFloat(activeShift.kas_diharapkan || 0) + payNominal;
+        await trx("trx_kasir_shift").where("id", activeShift.id).update({
+          total_penjualan_tunai: newTunai,
+          kas_diharapkan: newKasDiharapkan,
+          updated_by: username,
+          updated_at: DB.fn.now(),
+        });
 
-          await trx("trx_kasir_shift").where("id", activeShift.id).update({
-            total_penjualan_tunai: newTunai,
-            kas_diharapkan: newKasDiharapkan,
-            updated_by: username,
-            updated_at: DB.fn.now(),
-          });
+        const countMut = await trx("trx_kasir_mutasi_kas")
+          .where("kode_shift", activeShift.kode_shift)
+          .count("id as total")
+          .first();
+        const nextMutSeq = (parseInt(countMut?.total || 0, 10) + 1).toString().padStart(3, "0");
+        const kodeMutasi = `MUT-${activeShift.kode_shift.replace("SFT-", "")}-${nextMutSeq}`;
 
-          const countMut = await trx("trx_kasir_mutasi_kas")
-            .where("kode_shift", activeShift.kode_shift)
-            .count("id as total")
-            .first();
-          const nextMutSeq = (parseInt(countMut?.total || 0, 10) + 1).toString().padStart(3, "0");
-          const kodeMutasi = `MUT-${activeShift.kode_shift.replace("SFT-", "")}-${nextMutSeq}`;
-
-          await trx("trx_kasir_mutasi_kas").insert({
-            kode_mutasi: kodeMutasi,
-            kode_shift: activeShift.kode_shift,
-            user_code: activeShift.user_code,
-            nama_kasir: activeShift.nama_kasir,
-            kode_cabang: activeShift.kode_cabang,
-            tipe: "penjualan_tunai",
-            kategori: `Penjualan Tunai (${kode_transaksi})`,
-            nominal: payNominal,
-            arus: "masuk",
-            saldo_setelah: newKasDiharapkan,
-            referensi: kode_transaksi,
-            keterangan: `Pembayaran tunai transaksi ${kode_transaksi}`,
-            created_by: username,
-            created_at: nowWib,
-          });
-        } else {
-          const newNonTunai = parseFloat(activeShift.total_penjualan_nontunai || 0) + payNominal;
-          await trx("trx_kasir_shift").where("id", activeShift.id).update({
-            total_penjualan_nontunai: newNonTunai,
-            updated_by: username,
-            updated_at: DB.fn.now(),
-          });
-        }
+        await trx("trx_kasir_mutasi_kas").insert({
+          kode_mutasi: kodeMutasi,
+          kode_shift: activeShift.kode_shift,
+          user_code: activeShift.user_code,
+          nama_kasir: activeShift.nama_kasir,
+          kode_cabang: activeShift.kode_cabang,
+          tipe: "penjualan_tunai",
+          kategori: `Penjualan Tunai (${kode_transaksi})`,
+          nominal: payNominal,
+          arus: "masuk",
+          saldo_setelah: newKasDiharapkan,
+          referensi: kode_transaksi,
+          keterangan: `Pembayaran tunai transaksi ${kode_transaksi}`,
+          created_by: username,
+          created_at: nowWib,
+        });
+      } else {
+        const newNonTunai = parseFloat(activeShift.total_penjualan_nontunai || 0) + payNominal;
+        await trx("trx_kasir_shift").where("id", activeShift.id).update({
+          total_penjualan_nontunai: newNonTunai,
+          updated_by: username,
+          updated_at: DB.fn.now(),
+        });
       }
     } catch (shiftErr) {
       console.warn("Peringatan: Gagal mencatat mutasi shift kasir:", shiftErr?.message);

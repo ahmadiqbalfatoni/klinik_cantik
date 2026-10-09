@@ -119,6 +119,7 @@ interface KasirPOSPanelProps {
     total_diskon?: number;
   }) => void;
   onOpenStruk?: (result: BayarResult) => void;
+  isShiftOpen?: boolean;
 }
 
 export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
@@ -127,6 +128,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
   onDraftSaved,
   onOpenBayar,
   onOpenStruk,
+  isShiftOpen = true,
 }) => {
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -556,6 +558,10 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
   // Buka Pop-up Modal Produk: inisialisasi draft dari daftar produk yang sudah ada di cart
   const handleOpenProdukModal = () => {
     if (isReadOnly) return;
+    if (!isShiftOpen) {
+      showWarning(toast, 'Sesi shift kasir belum dibuka! Silakan buka sesi shift terlebih dahulu.');
+      return;
+    }
     const existingProdukInCart: SelectedProduk[] = cart
       .filter((item) => item.jenis === 'produk')
       .map((item) => {
@@ -739,6 +745,10 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
   };
 
   const handleSaveDraft = async () => {
+    if (!isShiftOpen) {
+      showWarning(toast, 'Sesi shift kasir belum dibuka! Buka sesi shift terlebih dahulu untuk menyimpan draft.');
+      return;
+    }
     const currentKunjungan = selectedKunjungan || {
       kode_kunjungan: '',
       kode_booking: null,
@@ -789,6 +799,10 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
   };
 
   const handleBayar = async () => {
+    if (!isShiftOpen) {
+      showWarning(toast, 'Sesi shift kasir belum dibuka! Buka sesi shift terlebih dahulu untuk menyelesaikan transaksi.');
+      return;
+    }
     const currentKunjungan = selectedKunjungan || {
       kode_kunjungan: '',
       kode_booking: null,
@@ -881,6 +895,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
                 label={cart.some((c) => c.jenis === 'produk') ? "Ubah / Tambah Produk" : "Tambah Produk"}
                 icon={cart.some((c) => c.jenis === 'produk') ? "pi pi-pencil" : "pi pi-plus"}
                 size="small"
+                disabled={!isShiftOpen}
                 className="text-xs font-bold py-1.5 px-3 border-round-lg bg-teal-600 text-white border-none hover:bg-teal-700 shadow-1 transition-all"
                 onClick={handleOpenProdukModal}
               />
@@ -919,6 +934,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
                     icon="pi pi-plus"
                     size="small"
                     outlined
+                    disabled={!isShiftOpen}
                     className="text-xs font-bold mt-1 text-teal-700 border-teal-400 hover:bg-teal-50"
                     onClick={handleOpenProdukModal}
                   />
@@ -1206,7 +1222,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
                 severity="secondary"
                 onClick={handleSaveDraft}
                 loading={savingDraft}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || !isShiftOpen}
                 className="font-bold text-xs border-round-lg flex-1 py-2"
               />
               <Button
@@ -1215,7 +1231,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
                 severity="success"
                 onClick={handleBayar}
                 loading={savingDraft}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || !isShiftOpen}
                 className="font-bold text-xs bg-teal-600 border-none border-round-lg text-white shadow-2 flex-1 py-2"
               />
             </div>

@@ -82,6 +82,24 @@ router.post("/", async (req, res) => {
     }
   }
 
+  // Validasi sesi shift kasir aktif - Wajib membuka sesi shift kasir sebelum membuat atau menyimpan transaksi
+  const userCode = req?.auth?.user_code || "";
+  const activeShift = await DB("trx_kasir_shift")
+    .where(function () {
+      if (userCode) this.where("user_code", userCode);
+      else this.where("created_by", username);
+    })
+    .where("status", "open")
+    .first();
+
+  if (!activeShift) {
+    return res.status(400).json({
+      status: status.BAD_REQUEST,
+      message: "Sesi shift kasir belum dibuka. Anda harus membuka sesi shift kasir terlebih dahulu sebelum membuat atau memproses transaksi kasir.",
+      datetime: formatDateSystem(),
+    });
+  }
+
   // Validasi ketersediaan stok fisik produk (Early Validation)
   const stockCheck = await validateStockAvailability(items, currentBranch);
   if (!stockCheck.valid) {

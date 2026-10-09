@@ -141,15 +141,23 @@ export default function KasirPage() {
   }, [refreshList]);
 
   const handleOpenBayar = useCallback((payload: typeof pendingBayarPayload) => {
+    if (!isShiftOpen) {
+      showError(toast, 'Sesi shift kasir belum dibuka! Harap buka sesi shift terlebih dahulu.');
+      return;
+    }
     setPendingBayarPayload(payload);
     setShowBayarModal(true);
-  }, []);
+  }, [isShiftOpen]);
 
   const handleListChange = useCallback((list: TransaksiListItem[]) => {
     setTransaksiList(list);
   }, []);
 
   const handleBayarConfirm = useCallback(async (metode: string, nominal: number) => {
+    if (!isShiftOpen) {
+      showError(toast, 'Sesi shift kasir belum dibuka! Pembayaran tidak dapat diproses.');
+      return;
+    }
     if (!pendingBayarPayload) return;
     try {
       const res = await postData('/master/kasir-bayar', {
@@ -180,7 +188,7 @@ export default function KasirPage() {
     } catch {
       showError(toast, 'Gagal terhubung ke server');
     }
-  }, [pendingBayarPayload, refreshList]);
+  }, [isShiftOpen, pendingBayarPayload, refreshList]);
 
   return (
     <div className="w-full h-full kasir-page-container flex flex-column" style={{ minHeight: 0, minWidth: 0 }}>
@@ -225,6 +233,47 @@ export default function KasirPage() {
           </div>
         )}
 
+        {/* LOCK OVERLAY IF CASHIER HAS NOT OPENED SHIFT SESSION */}
+        {isAccessAllowed && !isShiftOpen && (
+          <div
+            className="absolute inset-0 z-5 flex flex-column align-items-center justify-content-center border-round-xl"
+            style={{ backgroundColor: 'rgba(255, 255, 255, 0.88)', backdropFilter: 'blur(3px)' }}
+          >
+            <div className="p-4 border-round-xl bg-white shadow-4 border-1 surface-border text-center max-w-md mx-3">
+              <div className="w-4rem h-4rem border-round-circle bg-amber-100 flex align-items-center justify-content-center text-amber-600 mx-auto mb-3">
+                <i className="pi pi-exclamation-triangle text-3xl" />
+              </div>
+              <h4 className="font-bold text-900 mb-1">Sesi Shift Kasir Belum Dibuka</h4>
+              <p className="text-500 text-xs mb-3">
+                Anda belum dapat mengakses atau menyelesaikan transaksi kasir karena sesi shift kasir belum dibuka. Silakan buka sesi shift dengan modal kas awal terlebih dahulu.
+              </p>
+              <div className="flex justify-content-center gap-2 flex-wrap">
+                <Button
+                  label="Buka Sesi Shift Kasir"
+                  icon="pi pi-lock-open"
+                  size="small"
+                  severity="success"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new Event('trigger-open-shift-modal'));
+                    }
+                  }}
+                  className="text-xs font-bold border-round-md px-3 bg-teal-600 border-teal-600"
+                />
+                <Button
+                  label="Cek Ulang Status Shift"
+                  icon="pi pi-refresh"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  onClick={() => setShiftRefreshKey((k) => k + 1)}
+                  className="text-xs font-bold border-round-md px-3"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SIDEBAR KIRI: Daftar Transaksi & Stat */}
         <div className="h-full overflow-hidden border-round-xl shadow-1 border-1 surface-border kasir-sidebar-wrapper">
           <KasirSidebar
@@ -234,6 +283,7 @@ export default function KasirPage() {
             onSelectTrx={handleSelectTrx}
             onNewTrx={handleNewTrx}
             onListChange={handleListChange}
+            isShiftOpen={isShiftOpen}
           />
         </div>
 
@@ -248,6 +298,7 @@ export default function KasirPage() {
               setBayarResult(res);
               setShowStrukModal(true);
             }}
+            isShiftOpen={isShiftOpen}
           />
         </div>
 
