@@ -282,7 +282,7 @@ const AppMenu = () => {
                                 }
                             ];
                         } else {
-                            subItems = [
+                            const standardDashboards: AppMenuItem[] = [
                                 {
                                     label: 'Dashboard Utama',
                                     to: '/dashboard',
@@ -299,6 +299,12 @@ const AppMenu = () => {
                                     icon: 'pi pi-fw pi-calendar',
                                 }
                             ];
+
+                            if (userAllowedPaths.size > 0) {
+                                subItems = standardDashboards.filter((it) => it.to && userAllowedPaths.has(it.to));
+                            } else {
+                                subItems = standardDashboards;
+                            }
                         }
                     }
 
