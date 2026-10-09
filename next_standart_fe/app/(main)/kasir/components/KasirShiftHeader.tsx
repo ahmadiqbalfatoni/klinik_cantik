@@ -352,9 +352,9 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: '16px',
+                gap: '12px',
                 width: '100%',
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
               }}
             >
               {/* 1. Identitas Sesi Shift & Kasir */}
@@ -364,33 +364,33 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                   alignItems: 'center',
                   gap: '12px',
                   flexShrink: 0,
-                  paddingRight: '16px',
+                  paddingRight: '14px',
                   borderRight: '1px solid #e2e8f0',
                 }}
               >
                 <div
                   style={{
-                    width: '42px',
-                    height: '42px',
+                    width: '44px',
+                    height: '44px',
                     borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
-                    color: '#ffffff',
+                    backgroundColor: '#f0fdfa',
+                    border: '1px solid #ccfbf1',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
-                    boxShadow: '0 2px 6px rgba(13, 148, 136, 0.25)',
                   }}
                 >
-                  <i className="pi pi-wallet" style={{ fontSize: '18px' }} />
+                  <i className="pi pi-wallet" style={{ fontSize: '20px', color: '#0f766e' }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, lineHeight: 1 }}>info</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span
                       style={{
                         fontFamily: 'monospace',
                         fontWeight: 800,
-                        fontSize: '14px',
+                        fontSize: '15px',
                         color: '#0f766e',
                         letterSpacing: '-0.02em',
                       }}
@@ -401,21 +401,21 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        backgroundColor: '#dcfce7',
-                        color: '#15803d',
+                        gap: '5px',
+                        backgroundColor: '#0f766e',
+                        color: '#ffffff',
                         fontSize: '10px',
                         fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '6px',
+                        padding: '2px 10px',
+                        borderRadius: '20px',
                       }}
                     >
                       <span
                         style={{
-                          width: '6px',
-                          height: '6px',
+                          width: '5px',
+                          height: '5px',
                           borderRadius: '50%',
-                          backgroundColor: '#22c55e',
+                          backgroundColor: '#ffffff',
                           display: 'inline-block',
                         }}
                       />
@@ -443,108 +443,83 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                 </div>
               </div>
 
-              {/* 2. Ringkasan Kas Cepat */}
+              {/* 2. Ringkasan Kas Cepat (Widget Terpadu Baru seperti Gambar 2) */}
               <div
                 style={{
+                  padding: '7px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: '#f0fdfa',
+                  border: '1px solid #ccfbf1',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  flexWrap: 'nowrap',
+                  flexDirection: 'column',
+                  gap: '6px',
                   flexShrink: 0,
                 }}
               >
-                {/* Modal Awal */}
-                <div
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '8px',
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    minWidth: '110px',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Modal Awal
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#334155', marginTop: '2px' }}>
-                    {formatRupiah(activeShift.modal_awal)}
-                  </span>
-                </div>
-
-                {/* Tunai Masuk */}
-                <div
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '8px',
-                    backgroundColor: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    minWidth: '110px',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Tunai Masuk
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#16a34a', marginTop: '2px' }}>
-                    +{formatRupiah(activeShift.total_penjualan_tunai)}
-                  </span>
-                </div>
-
-                {/* Kas Keluar (Jika ada) */}
-                {parseFloat(activeShift.total_kas_keluar || 0) > 0 && (
+                {/* Slim progress bar di bagian atas */}
+                <div style={{ width: '100%', height: '4px', backgroundColor: '#ccfbf1', borderRadius: '4px', overflow: 'hidden' }}>
                   <div
                     style={{
-                      padding: '6px 14px',
-                      borderRadius: '8px',
-                      backgroundColor: '#fff1f2',
-                      border: '1px solid #fecdd3',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      minWidth: '110px',
-                      boxSizing: 'border-box',
+                      width: '60%',
+                      height: '100%',
+                      backgroundColor: '#0d9488',
+                      borderRadius: '4px',
                     }}
-                  >
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#be123c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Kas Keluar
-                    </span>
-                    <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#e11d48', marginTop: '2px' }}>
-                      -{formatRupiah(activeShift.total_kas_keluar)}
-                    </span>
-                  </div>
-                )}
+                  />
+                </div>
 
-                {/* Highlight Utama: Kas Fisik Laci */}
-                <div
-                  style={{
-                    padding: '6px 16px',
-                    borderRadius: '8px',
-                    backgroundColor: '#f0fdfa',
-                    border: '1.5px solid #0d9488',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    minWidth: '130px',
-                    boxSizing: 'border-box',
-                    boxShadow: '0 1px 3px rgba(13, 148, 136, 0.12)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#0d9488', display: 'inline-block' }} />
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#0f766e', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Kas Fisik Laci
+                {/* Konten Widget: Donut mini + Kas Fisik Laci + Tunai Masuk */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  {/* Donut Chart Mini */}
+                  <svg width="34" height="34" viewBox="0 0 36 36" style={{ flexShrink: 0 }}>
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#e2e8f0" strokeWidth="4.5" />
+                    <circle
+                      cx="18" cy="18" r="14" fill="none"
+                      stroke="#0d9488" strokeWidth="4.5"
+                      strokeDasharray="65 100"
+                      strokeDashoffset="25"
+                      strokeLinecap="round"
+                    />
+                    <circle
+                      cx="18" cy="18" r="14" fill="none"
+                      stroke="#86efac" strokeWidth="4.5"
+                      strokeDasharray="25 100"
+                      strokeDashoffset="90"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+
+                  {/* Kolom Kas Fisik Laci */}
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#0d9488', display: 'inline-block' }} />
+                      <span style={{ fontSize: '10px', fontWeight: 800, color: '#0f766e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Kas Fisik Laci
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 900, fontFamily: 'monospace', color: '#0f172a', lineHeight: 1.2 }}>
+                      {formatRupiah(activeShift.kas_diharapkan)}
+                    </span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginTop: '2px' }}>
+                      Modal Awal: <strong style={{ color: '#475569' }}>{formatRupiah(activeShift.modal_awal)}</strong>
                     </span>
                   </div>
-                  <span style={{ fontSize: '13px', fontWeight: 900, fontFamily: 'monospace', color: '#115e59', marginTop: '2px' }}>
-                    {formatRupiah(activeShift.kas_diharapkan)}
-                  </span>
+
+                  {/* Kolom Tunai Masuk */}
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#16a34a', display: 'inline-block' }} />
+                      <span style={{ fontSize: '10px', fontWeight: 800, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Tunai Masuk
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 900, fontFamily: 'monospace', color: '#16a34a', lineHeight: 1.2 }}>
+                      +{formatRupiah(activeShift.total_penjualan_tunai)}
+                    </span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginTop: '2px' }}>
+                      Tunai Masuk: <strong style={{ color: '#16a34a' }}>+{formatRupiah(activeShift.total_penjualan_tunai)}</strong>
+                    </span>
+                  </div>
                 </div>
               </div>
 
