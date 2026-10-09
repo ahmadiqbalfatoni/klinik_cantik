@@ -19,6 +19,7 @@ import { TabView, TabPanel } from 'primereact/tabview';
 import { useSession } from 'next-auth/react';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
+import { clearUserMenuCache } from '@/lib/tools/serverTools';
 import KeteranganStatus from '@/app/components/KeteranganStatus';
 
 interface UserRecord {
@@ -966,6 +967,12 @@ export default function ManajemenUserPage() {
           setShowModal(false);
           fetchUsers();
           fetchKaryawan();
+          try {
+            await clearUserMenuCache(payload.user_code);
+          } catch (_) {}
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('menu-updated'));
+          }
         } else {
           showError(toast, res?.data?.message || 'Gagal memperbarui data pengguna');
         }
@@ -988,6 +995,12 @@ export default function ManajemenUserPage() {
           setShowModal(false);
           fetchUsers();
           fetchKaryawan();
+          try {
+            await clearUserMenuCache();
+          } catch (_) {}
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('menu-updated'));
+          }
         } else {
           showError(toast, res?.data?.message || 'Gagal menambahkan pengguna baru');
         }

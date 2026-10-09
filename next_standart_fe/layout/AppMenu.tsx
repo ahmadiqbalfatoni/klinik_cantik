@@ -136,8 +136,6 @@ const AppMenu = () => {
     const isSuperAdminUser = userRole === 'superadmin' || userRole === 'admin_pusat';
 
     const getRoleAllowedReports = () => {
-        if (isOwnerOrManagerRole || isSuperAdminUser) return LAPORAN_MENU_ITEMS;
-
         if (state.allowedPaths.size > 0) {
             const hasAnyTab = LAPORAN_MENU_ITEMS.some((it) =>
                 state.allowedPaths.has('/riwayat/rekam-medis?tab=' + it.id)
@@ -152,6 +150,8 @@ const AppMenu = () => {
             }
             return LAPORAN_MENU_ITEMS;
         }
+
+        if (isOwnerOrManagerRole || isSuperAdminUser) return LAPORAN_MENU_ITEMS;
 
         if (userRole === 'dokter') {
             return LAPORAN_MENU_ITEMS.filter((it) => ['dokter', 'rekam_medis', 'pasien', 'kunjungan'].includes(it.id));
@@ -184,6 +184,16 @@ const AppMenu = () => {
 
     useEffect(() => {
         getMenu(session?.user?.user_code || 'USR000000');
+    }, [session]);
+
+    useEffect(() => {
+        const handleMenuUpdated = () => {
+            if (session?.user?.user_code) {
+                getMenu(session.user.user_code);
+            }
+        };
+        window.addEventListener('menu-updated', handleMenuUpdated);
+        return () => window.removeEventListener('menu-updated', handleMenuUpdated);
     }, [session]);
 
     useEffect(() => {
@@ -491,94 +501,109 @@ const AppMenu = () => {
             const isSuperAdminRole = currentRole === 'superadmin';
             const isOwnerOrManager = currentRole === 'owner' || currentRole === 'manager';
 
-            if (isOwnerOrManager && userAllowedPaths.size === 0) {
-                // Garansi Master Data selalu ada di sidebar (khusus pengguna Owner / Manager)
-                const hasMasterData = transformedMenu.some(
-                    (it) => (it.label || '').toLowerCase().includes('master data') && !(it.label || '').toLowerCase().includes('pengaturan')
-                );
-                if (!hasMasterData) {
-                    const homeIdx = transformedMenu.findIndex(
-                        (it) => {
-                            const lbl = (it.label || '').toLowerCase();
-                            return lbl === 'home' || lbl === 'beranda' || lbl.includes('dashboard') || it.to === '/';
-                        }
-                    );
-                    const masterGroup: AppMenuItem = {
-                        label: 'MASTER DATA',
-                        icon: 'pi pi-fw pi-database',
-                        items: DEFAULT_MASTER_DATA_ITEMS,
-                    };
-                    if (homeIdx !== -1) {
-                        transformedMenu.splice(homeIdx + 1, 0, transformItem(masterGroup));
-                    } else {
-                        transformedMenu.unshift(transformItem(masterGroup));
-                    }
-                }
-
-                // Garansi Pendaftaran & Antrean selalu ada di sidebar untuk Owner / Manager
-                const hasPendaftaran = transformedMenu.some(
-                    (it) => {
-                        const lbl = (it.label || '').toLowerCase();
-                        return (lbl.includes('pendaftaran') || lbl.includes('antrean')) && !lbl.includes('master data') && !lbl.includes('pengaturan');
-                    }
-                );
-                if (!hasPendaftaran) {
-                    const pendaftaranGroup: AppMenuItem = {
-                        label: 'Pendaftaran & Antrean',
-                        icon: 'pi pi-fw pi-calendar',
-                        items: DEFAULT_PENDAFTARAN_ITEMS,
-                    };
-                    const masterIdx = transformedMenu.findIndex(
+            if (userAllowedPaths.size === 0) {
+                if (isOwnerOrManager) {
+                    // Garansi Master Data selalu ada di sidebar (khusus pengguna Owner / Manager default jika belum disetup)
+                    const hasMasterData = transformedMenu.some(
                         (it) => (it.label || '').toLowerCase().includes('master data') && !(it.label || '').toLowerCase().includes('pengaturan')
                     );
-                    if (masterIdx !== -1) {
-                        transformedMenu.splice(masterIdx + 1, 0, transformItem(pendaftaranGroup));
-                    } else {
-                        transformedMenu.push(transformItem(pendaftaranGroup));
+                    if (!hasMasterData) {
+                        const homeIdx = transformedMenu.findIndex(
+                            (it) => {
+                                const lbl = (it.label || '').toLowerCase();
+                                return lbl === 'home' || lbl === 'beranda' || lbl.includes('dashboard') || it.to === '/';
+                            }
+                        );
+                        const masterGroup: AppMenuItem = {
+                            label: 'MASTER DATA',
+                            icon: 'pi pi-fw pi-database',
+                            items: DEFAULT_MASTER_DATA_ITEMS,
+                        };
+                        if (homeIdx !== -1) {
+                            transformedMenu.splice(homeIdx + 1, 0, transformItem(masterGroup));
+                        } else {
+                            transformedMenu.unshift(transformItem(masterGroup));
+                        }
                     }
+
+                    // Garansi Pendaftaran & Antrean selalu ada di sidebar untuk Owner / Manager default
+                    const hasPendaftaran = transformedMenu.some(
+                        (it) => {
+                            const lbl = (it.label || '').toLowerCase();
+                            return (lbl.includes('pendaftaran') || lbl.includes('antrean')) && !lbl.includes('master data') && !lbl.includes('pengaturan');
+                        }
+                    );
+                    if (!hasPendaftaran) {
+                        const pendaftaranGroup: AppMenuItem = {
+                            label: 'Pendaftaran & Antrean',
+                            icon: 'pi pi-fw pi-calendar',
+                            items: DEFAULT_PENDAFTARAN_ITEMS,
+                        };
+                        const masterIdx = transformedMenu.findIndex(
+                            (it) => (it.label || '').toLowerCase().includes('master data') && !(it.label || '').toLowerCase().includes('pengaturan')
+                        );
+                        if (masterIdx !== -1) {
+                            transformedMenu.splice(masterIdx + 1, 0, transformItem(pendaftaranGroup));
+                        } else {
+                            transformedMenu.push(transformItem(pendaftaranGroup));
+                        }
+                    }
+
+                    // Garansi Pengaturan Klinik selalu ada di sidebar untuk Owner / Manager default
+                    const hasPengaturan = transformedMenu.some(
+                        (it) => (it.label || '').toLowerCase().includes('pengaturan') || (it.label || '').toLowerCase().includes('setup')
+                    );
+                    if (!hasPengaturan) {
+                        const pengaturanGroup: AppMenuItem = {
+                            label: 'PENGATURAN KLINIK',
+                            icon: 'pi pi-fw pi-cog',
+                            items: DEFAULT_PENGATURAN_ITEMS,
+                        };
+                        transformedMenu.push(transformItem(pengaturanGroup));
+                    }
+                } else if (isSuperAdminRole) {
+                    // Khusus Superadmin jika belum disetup hak akses: default HANYA Dashboard dan Pengaturan Klinik
+                    transformedMenu = transformedMenu.filter((it) => {
+                        const lbl = (it.label || '').toLowerCase();
+                        return lbl === 'home' || lbl === 'beranda' || lbl.includes('dashboard') || lbl.includes('pengaturan') || lbl.includes('setup');
+                    });
                 }
 
-                // Garansi Pengaturan Klinik selalu ada di sidebar untuk Owner / Manager
-                const hasPengaturan = transformedMenu.some(
-                    (it) => (it.label || '').toLowerCase().includes('pengaturan') || (it.label || '').toLowerCase().includes('setup')
-                );
-                if (!hasPengaturan) {
-                    const pengaturanGroup: AppMenuItem = {
-                        label: 'PENGATURAN KLINIK',
-                        icon: 'pi pi-fw pi-cog',
-                        items: DEFAULT_PENGATURAN_ITEMS,
-                    };
-                    transformedMenu.push(transformItem(pengaturanGroup));
+                // Garansi hak akses transaksi jika userAllowedPaths kosong (default role)
+                if (isOwnerOrManager || currentRole === 'admin') {
+                    userAllowedPaths.add('/kasir');
+                    userAllowedPaths.add('/master-data/inventori');
+                    userAllowedPaths.add('/transaksi/tracking-kasir');
+                } else if (currentRole === 'kasir') {
+                    userAllowedPaths.add('/kasir');
+                    userAllowedPaths.add('/transaksi/tracking-kasir');
+                } else if (currentRole === 'warehouse') {
+                    userAllowedPaths.add('/master-data/inventori');
                 }
-            } else if (isSuperAdminRole) {
-                // Khusus Superadmin: HANYA Dashboard dan Pengaturan Klinik
-                transformedMenu = transformedMenu.filter((it) => {
-                    const lbl = (it.label || '').toLowerCase();
-                    return lbl === 'home' || lbl === 'beranda' || lbl.includes('dashboard') || lbl.includes('pengaturan') || lbl.includes('setup');
-                });
             }
 
-            // Garansi hak akses transaksi (Kasir, Inventori, Tracking Kas Kasir)
-            const canAccessTrackingKasir = isOwnerOrManager || currentRole === 'admin';
-            if (isOwnerOrManager || currentRole === 'admin') {
-                userAllowedPaths.add('/kasir');
-                userAllowedPaths.add('/master-data/inventori');
-                userAllowedPaths.add('/transaksi/tracking-kasir');
-            } else if (canAccessTrackingKasir) {
-                userAllowedPaths.add('/transaksi/tracking-kasir');
-            }
-
-            // Standarisasi grup TRANSAKSI di transformedMenu:
-            // Pastikan hanya ada 1 grup TRANSAKSI yang berisi [Kasir, Inventori, Tracking Kas Kasir]
+            // Standarisasi grup TRANSAKSI di transformedMenu berdasarkan hak akses nyata
             const defaultTrxSubItems: AppMenuItem[] = [];
-            if (isOwnerOrManager || currentRole === 'kasir' || currentRole === 'admin' || userAllowedPaths.has('/kasir')) {
-                defaultTrxSubItems.push({ label: 'Kasir', icon: 'pi pi-fw pi-calculator', to: '/kasir' });
-            }
-            if (isOwnerOrManager || currentRole === 'warehouse' || currentRole === 'admin' || userAllowedPaths.has('/master-data/inventori')) {
-                defaultTrxSubItems.push({ label: 'Inventori', icon: 'pi pi-fw pi-box', to: '/master-data/inventori' });
-            }
-            if (canAccessTrackingKasir || userAllowedPaths.has('/transaksi/tracking-kasir')) {
-                defaultTrxSubItems.push({ label: 'Tracking Kas Kasir', icon: 'pi pi-fw pi-wallet', to: '/transaksi/tracking-kasir' });
+            if (userAllowedPaths.size > 0) {
+                if (userAllowedPaths.has('/kasir')) {
+                    defaultTrxSubItems.push({ label: 'Kasir', icon: 'pi pi-fw pi-calculator', to: '/kasir' });
+                }
+                if (userAllowedPaths.has('/master-data/inventori')) {
+                    defaultTrxSubItems.push({ label: 'Inventori', icon: 'pi pi-fw pi-box', to: '/master-data/inventori' });
+                }
+                if (userAllowedPaths.has('/transaksi/tracking-kasir')) {
+                    defaultTrxSubItems.push({ label: 'Tracking Kas Kasir', icon: 'pi pi-fw pi-wallet', to: '/transaksi/tracking-kasir' });
+                }
+            } else {
+                if (isOwnerOrManager || currentRole === 'kasir' || currentRole === 'admin' || isSuperAdminRole) {
+                    defaultTrxSubItems.push({ label: 'Kasir', icon: 'pi pi-fw pi-calculator', to: '/kasir' });
+                }
+                if (isOwnerOrManager || currentRole === 'warehouse' || currentRole === 'admin' || isSuperAdminRole) {
+                    defaultTrxSubItems.push({ label: 'Inventori', icon: 'pi pi-fw pi-box', to: '/master-data/inventori' });
+                }
+                if (isOwnerOrManager || currentRole === 'admin' || currentRole === 'kasir' || isSuperAdminRole) {
+                    defaultTrxSubItems.push({ label: 'Tracking Kas Kasir', icon: 'pi pi-fw pi-wallet', to: '/transaksi/tracking-kasir' });
+                }
             }
 
             // Cari index grup TRANSAKSI atau KASIR di transformedMenu
@@ -591,16 +616,22 @@ const AppMenu = () => {
             });
 
             if (trxIndices.length > 0) {
-                const primaryGroup = transformedMenu[trxIndices[0]];
-                primaryGroup.label = 'TRANSAKSI';
-                primaryGroup.icon = 'pi pi-fw pi-calculator';
-                primaryGroup.items = defaultTrxSubItems;
+                if (defaultTrxSubItems.length > 0) {
+                    const primaryGroup = transformedMenu[trxIndices[0]];
+                    primaryGroup.label = 'TRANSAKSI';
+                    primaryGroup.icon = 'pi pi-fw pi-calculator';
+                    primaryGroup.items = defaultTrxSubItems;
 
-                // Hapus duplikat dari belakang jika ada lebih dari 1 grup
-                for (let i = trxIndices.length - 1; i >= 1; i--) {
-                    transformedMenu.splice(trxIndices[i], 1);
+                    // Hapus duplikat dari belakang jika ada lebih dari 1 grup
+                    for (let i = trxIndices.length - 1; i >= 1; i--) {
+                        transformedMenu.splice(trxIndices[i], 1);
+                    }
+                } else {
+                    for (let i = trxIndices.length - 1; i >= 0; i--) {
+                        transformedMenu.splice(trxIndices[i], 1);
+                    }
                 }
-            } else if (defaultTrxSubItems.length > 0 && !isSuperAdminRole) {
+            } else if (defaultTrxSubItems.length > 0) {
                 const targetIdx = transformedMenu.findIndex((it) => {
                     const lbl = (it.label || '').toLowerCase();
                     return lbl.includes('laporan') || lbl.includes('pengaturan') || lbl.includes('setup');
@@ -827,19 +858,23 @@ const AppMenu = () => {
 
                         // 1. Home / Dashboard
                         const homeItems = state.filteredMenu.filter(isHomeItem);
-                        // 2. Master Data (tampilkan jika ada di menu pengguna dan bukan superadmin)
-                        const masterDataItems = !isSuperAdminRole ? state.filteredMenu.filter(isMasterDataItem) : [];
-                        // 3. Pendaftaran (tampilkan jika ada di menu pengguna dan bukan superadmin)
-                        const pendaftaranItems = !isSuperAdminRole ? state.filteredMenu.filter(isPendaftaranItem) : [];
+                        // 2. Master Data (tampilkan jika ada di menu pengguna)
+                        const masterDataItems = state.filteredMenu.filter(isMasterDataItem);
+                        // 3. Pendaftaran (tampilkan jika ada di menu pengguna)
+                        const pendaftaranItems = state.filteredMenu.filter(isPendaftaranItem);
                         const hasPengaturanAllowed =
-                            state.allowedPaths.has('/setup/config') ||
-                            state.allowedPaths.has('/setup/users') ||
-                            state.allowedPaths.has('/setup/navigation') ||
-                            state.allowedPaths.has('/setup/cabang') ||
-                            state.allowedPaths.has('/setup/monitoring-cabang');
+                            state.allowedPaths.size > 0
+                                ? (
+                                    state.allowedPaths.has('/setup/config') ||
+                                    state.allowedPaths.has('/setup/users') ||
+                                    state.allowedPaths.has('/setup/navigation') ||
+                                    state.allowedPaths.has('/setup/cabang') ||
+                                    state.allowedPaths.has('/setup/monitoring-cabang')
+                                  )
+                                : (isSuperAdminRole || isOwnerOrManager);
 
-                        // 7. Pengaturan (HANYA untuk Superadmin, Owner/Manager, atau user yang memiliki hak akses)
-                        const pengaturanItems = (isSuperAdminRole || isOwnerOrManager || hasPengaturanAllowed) ? state.filteredMenu.filter(isPengaturanItem) : [];
+                        // 7. Pengaturan (HANYA untuk user yang memiliki hak akses atau role default)
+                        const pengaturanItems = hasPengaturanAllowed ? state.filteredMenu.filter(isPengaturanItem) : [];
 
                         // Item tambahan lainnya di luar kategori utama dan bukan kasir/transaksi/laporan/layanan operasional
                         const extraItems = state.filteredMenu.filter((item) => {
@@ -876,58 +911,49 @@ const AppMenu = () => {
 
                         // Hak Akses Operasional Berdasarkan Role & Permission Navigasi yang Diberikan
                         const hasAllowedPath = (target: string) => {
-                            if (isSuperAdminRole || isOwnerOrManager) return true;
-                            if (state.allowedPaths.has(target)) return true;
-                            for (const p of state.allowedPaths) {
-                                if (target.includes('?') && p.startsWith(target)) return true;
-                                if (!target.includes('?') && (p === target || p.startsWith(target + '?'))) return true;
+                            if (state.allowedPaths.size > 0) {
+                                if (state.allowedPaths.has(target)) return true;
+                                for (const p of state.allowedPaths) {
+                                    if (target.includes('?') && p.startsWith(target)) return true;
+                                    if (!target.includes('?') && (p === target || p.startsWith(target + '?'))) return true;
+                                }
+                                return false;
                             }
+                            if (isSuperAdminRole || isOwnerOrManager) return true;
                             return false;
                         };
 
                         const canAccessTindakan =
-                            isSuperAdminRole ||
-                            isOwnerOrManager ||
-                            (state.allowedPaths.size > 0
+                            state.allowedPaths.size > 0
                                 ? hasAllowedPath('/pendaftaran-antrean/antrean?type=layanan')
-                                : ['dokter', 'beautician'].includes(currentRole));
+                                : (isSuperAdminRole || isOwnerOrManager || ['dokter', 'beautician'].includes(currentRole));
 
                         const canAccessKonsul =
-                            isSuperAdminRole ||
-                            isOwnerOrManager ||
-                            (state.allowedPaths.size > 0
+                            state.allowedPaths.size > 0
                                 ? hasAllowedPath('/pendaftaran-antrean/antrean?type=konsul')
-                                : currentRole === 'dokter');
+                                : (isSuperAdminRole || isOwnerOrManager || currentRole === 'dokter');
 
                         const canAccessLayanan = canAccessTindakan || canAccessKonsul;
 
                         const canAccessKasir =
-                            isSuperAdminRole ||
-                            isOwnerOrManager ||
-                            (state.allowedPaths.size > 0
+                            state.allowedPaths.size > 0
                                 ? hasAllowedPath('/kasir')
-                                : currentRole === 'kasir');
+                                : (isSuperAdminRole || isOwnerOrManager || currentRole === 'kasir');
 
                         const canAccessInventori =
-                            isSuperAdminRole ||
-                            isOwnerOrManager ||
-                            (state.allowedPaths.size > 0
+                            state.allowedPaths.size > 0
                                 ? hasAllowedPath('/master-data/inventori')
-                                : ['owner', 'manager', 'warehouse', 'admin'].includes(currentRole));
+                                : (isSuperAdminRole || isOwnerOrManager || ['owner', 'manager', 'warehouse', 'admin'].includes(currentRole));
 
                         const canAccessTrackingKasir =
-                            isSuperAdminRole ||
-                            isOwnerOrManager ||
-                            (state.allowedPaths.size > 0
+                            state.allowedPaths.size > 0
                                 ? hasAllowedPath('/transaksi/tracking-kasir')
-                                : ['owner', 'manager', 'admin', 'kasir'].includes(currentRole));
+                                : (isSuperAdminRole || isOwnerOrManager || ['owner', 'manager', 'admin', 'kasir'].includes(currentRole));
 
                         const canAccessLaporan =
-                            isSuperAdminRole ||
-                            isOwnerOrManager ||
-                            (state.allowedPaths.size > 0
+                            state.allowedPaths.size > 0
                                 ? (hasAllowedPath('/riwayat/rekam-medis') && roleReports.length > 0)
-                                : ['owner', 'manager', 'dokter', 'kasir', 'warehouse', 'admin'].includes(currentRole));
+                                : (isSuperAdminRole || isOwnerOrManager || ['owner', 'manager', 'dokter', 'kasir', 'warehouse', 'admin'].includes(currentRole));
 
                         const searchLower = state.searchVal.trim().toLowerCase();
                         const matchesTindakan = canAccessTindakan && (!searchLower || 'tindakan'.includes(searchLower) || 'layanan'.includes(searchLower));
