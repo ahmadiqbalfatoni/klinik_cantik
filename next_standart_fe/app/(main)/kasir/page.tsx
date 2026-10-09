@@ -208,25 +208,39 @@ export default function KasirPage() {
         {/* LOCK OVERLAY IF CASHIER IS OUTSIDE WORKING SCHEDULE */}
         {!isAccessAllowed && (
           <div
-            className="absolute inset-0 z-5 flex flex-column align-items-center justify-content-center border-round-xl"
-            style={{ backgroundColor: 'rgba(255, 255, 255, 0.88)', backdropFilter: 'blur(3px)' }}
+            className="flex flex-column align-items-center justify-content-center border-round-xl"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 50,
+              backgroundColor: 'rgba(255, 255, 255, 0.94)',
+              backdropFilter: 'blur(6px)',
+            }}
           >
-            <div className="p-4 border-round-xl bg-white shadow-4 border-1 surface-border text-center max-w-md mx-3">
+            <div
+              className="p-5 border-round-2xl bg-white shadow-6 border-1 surface-border text-center flex flex-column align-items-center"
+              style={{ maxWidth: '440px', width: '90%', margin: '0 16px' }}
+            >
               <div className="w-4rem h-4rem border-round-circle bg-red-100 flex align-items-center justify-content-center text-red-600 mx-auto mb-3">
                 <i className="pi pi-lock text-3xl" />
               </div>
-              <h4 className="font-bold text-900 mb-1">Fitur Kasir Terkunci</h4>
-              <p className="text-500 text-xs mb-3">
+              <h3 className="font-extrabold text-900 text-lg mb-2">Fitur Kasir Terkunci</h3>
+              <p className="text-600 text-xs line-height-3 mb-4">
                 Anda belum dapat mengakses transaksi kasir karena saat ini belum memasuki jadwal shift kerja Anda.
               </p>
-              <div className="flex justify-content-center gap-2">
+              <div className="flex justify-content-center gap-2 w-full">
                 <Button
                   label="Cek Ulang Status Jadwal"
                   icon="pi pi-refresh"
                   size="small"
                   severity="danger"
                   onClick={() => setShiftRefreshKey((k) => k + 1)}
-                  className="text-xs font-bold border-round-md px-3"
+                  className="text-xs font-bold border-round-lg px-4 py-2"
                 />
               </div>
             </div>
@@ -236,18 +250,35 @@ export default function KasirPage() {
         {/* LOCK OVERLAY IF CASHIER HAS NOT OPENED SHIFT SESSION */}
         {isAccessAllowed && !isShiftOpen && (
           <div
-            className="absolute inset-0 z-5 flex flex-column align-items-center justify-content-center border-round-xl"
-            style={{ backgroundColor: 'rgba(255, 255, 255, 0.88)', backdropFilter: 'blur(3px)' }}
+            className="flex flex-column align-items-center justify-content-center border-round-xl"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 50,
+              backgroundColor: 'rgba(255, 255, 255, 0.94)',
+              backdropFilter: 'blur(6px)',
+            }}
           >
-            <div className="p-4 border-round-xl bg-white shadow-4 border-1 surface-border text-center max-w-md mx-3">
-              <div className="w-4rem h-4rem border-round-circle bg-amber-100 flex align-items-center justify-content-center text-amber-600 mx-auto mb-3">
-                <i className="pi pi-exclamation-triangle text-3xl" />
+            <div
+              className="p-5 border-round-2xl bg-white shadow-6 border-1 surface-border text-center flex flex-column align-items-center"
+              style={{ maxWidth: '460px', width: '90%', margin: '0 16px' }}
+            >
+              <div
+                className="w-4rem h-4rem border-round-circle flex align-items-center justify-content-center mx-auto mb-3"
+                style={{ backgroundColor: '#FEF3C7', color: '#D97706' }}
+              >
+                <i className="pi pi-lock text-3xl" />
               </div>
-              <h4 className="font-bold text-900 mb-1">Sesi Shift Kasir Belum Dibuka</h4>
-              <p className="text-500 text-xs mb-3">
+              <h3 className="font-extrabold text-900 text-lg mb-2">Sesi Shift Kasir Belum Dibuka</h3>
+              <p className="text-600 text-xs line-height-3 mb-4">
                 Anda belum dapat mengakses atau menyelesaikan transaksi kasir karena sesi shift kasir belum dibuka. Silakan buka sesi shift dengan modal kas awal terlebih dahulu.
               </p>
-              <div className="flex justify-content-center gap-2 flex-wrap">
+              <div className="flex flex-column sm:flex-row justify-content-center gap-2 w-full">
                 <Button
                   label="Buka Sesi Shift Kasir"
                   icon="pi pi-lock-open"
@@ -258,7 +289,7 @@ export default function KasirPage() {
                       window.dispatchEvent(new Event('trigger-open-shift-modal'));
                     }
                   }}
-                  className="text-xs font-bold border-round-md px-3 bg-teal-600 border-teal-600"
+                  className="text-xs font-bold border-round-lg px-4 py-2 bg-teal-600 border-teal-600 shadow-2 hover:bg-teal-700"
                 />
                 <Button
                   label="Cek Ulang Status Shift"
@@ -267,7 +298,7 @@ export default function KasirPage() {
                   severity="secondary"
                   outlined
                   onClick={() => setShiftRefreshKey((k) => k + 1)}
-                  className="text-xs font-bold border-round-md px-3"
+                  className="text-xs font-bold border-round-lg px-3 py-2"
                 />
               </div>
             </div>
