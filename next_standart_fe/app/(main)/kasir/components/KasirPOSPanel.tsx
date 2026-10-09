@@ -878,14 +878,14 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
       {/* RINCIAN TRANSAKSI KASIR */}
       <div className="flex flex-column h-full w-full surface-card border-round-xl border-1 surface-border shadow-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
         {/* Panel Header */}
-        <div className="p-3 border-bottom-1 surface-border bg-white flex-shrink-0 flex align-items-center justify-content-between">
-          <label className="text-xs font-extrabold text-teal-800 uppercase tracking-wider flex align-items-center gap-2 m-0">
+        <div className="p-3 border-bottom-1 surface-border bg-white flex-shrink-0 flex align-items-center justify-content-between gap-2">
+          <label className="text-xs font-extrabold text-teal-800 uppercase tracking-wider flex align-items-center gap-2 m-0 white-space-nowrap flex-shrink-0">
             <i className="pi pi-user text-teal-600 text-sm" />
             RINCIAN TRANSAKSI KASIR
           </label>
-          <div className="flex align-items-center gap-2">
+          <div className="flex align-items-center gap-2 flex-shrink-0">
             {editingKodeTrx && (
-              <span className="text-xs font-medium text-slate-600 mr-2">
+              <span className="text-xs font-medium text-slate-600 mr-2 white-space-nowrap">
                 {editingKodeTrx}
               </span>
             )}
@@ -896,7 +896,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
                 icon={cart.some((c) => c.jenis === 'produk') ? "pi pi-pencil" : "pi pi-plus"}
                 size="small"
                 disabled={!isShiftOpen}
-                className="text-xs font-bold py-1.5 px-3 border-round-lg bg-teal-600 text-white border-none hover:bg-teal-700 shadow-1 transition-all"
+                className="text-xs font-bold py-1.5 px-3 border-round-lg bg-teal-600 text-white border-none hover:bg-teal-700 shadow-1 transition-all white-space-nowrap"
                 onClick={handleOpenProdukModal}
               />
             )}

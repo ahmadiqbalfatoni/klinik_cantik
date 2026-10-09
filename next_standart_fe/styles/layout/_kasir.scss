@@ -37,8 +37,12 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 7rem 2.5rem 2rem 0rem;
+    padding: 7rem 1.5rem 2rem 0rem;
     box-sizing: border-box;
+
+    @media (min-width: 1400px) {
+      padding: 7rem 2.5rem 2rem 0rem;
+    }
   }
 
   .layout-wrapper.layout-static-inactive .layout-main-container.layout-kasir-container,
@@ -78,7 +82,7 @@
     height: 100%;
     min-height: 0;
     min-width: 0;
-    width: 290px;
+    width: 280px;
     flex-shrink: 0;
   }
 
