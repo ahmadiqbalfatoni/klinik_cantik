@@ -412,7 +412,7 @@ const JadwalKaryawanContent = () => {
     }, []);
 
     const filteredKasirJadwals = useMemo(() => {
-        return kasirJadwalList.filter((item) => {
+        const filtered = kasirJadwalList.filter((item) => {
             if (filterKasirHari && (item.hari || '').toLowerCase() !== filterKasirHari.toLowerCase()) return false;
             if (filterKasirStaff && item.no_sip !== filterKasirStaff) return false;
             if (filterKasirStatus && item.status !== filterKasirStatus) return false;
@@ -424,6 +424,37 @@ const JadwalKaryawanContent = () => {
                 if (!matchKode && !matchNama && !matchHari) return false;
             }
             return true;
+        });
+
+        // Sort berdasarkan urutan hari (Senin -> Minggu), lalu jam_mulai
+        const sorted = [...filtered].sort((a, b) => {
+            const hA = HARI_ORDER[(a.hari || '').toLowerCase()] || 99;
+            const hB = HARI_ORDER[(b.hari || '').toLowerCase()] || 99;
+            if (hA !== hB) return hA - hB;
+            return (a.jam_mulai || '').localeCompare(b.jam_mulai || '');
+        });
+
+        // Hitung total sesi per hari untuk penggabungan sel baris hari yang sama
+        const countByDay: Record<string, number> = {};
+        sorted.forEach((item) => {
+            const dKey = (item.hari || '').toLowerCase();
+            countByDay[dKey] = (countByDay[dKey] || 0) + 1;
+        });
+
+        const seenByDay: Record<string, number> = {};
+        return sorted.map((item) => {
+            const dKey = (item.hari || '').toLowerCase();
+            const total = countByDay[dKey] || 1;
+            const index = seenByDay[dKey] || 0;
+            seenByDay[dKey] = index + 1;
+
+            return {
+                ...item,
+                day_session_index: index,
+                day_session_total: total,
+                is_first_session_of_day: index === 0,
+                is_last_session_of_day: index === total - 1,
+            };
         });
     }, [kasirJadwalList, filterKasirHari, filterKasirStaff, filterKasirStatus, kasirSearch]);
 
@@ -1662,6 +1693,10 @@ const JadwalKaryawanContent = () => {
                             paginator
                             rows={10}
                             rowsPerPageOptions={[10, 25, 50]}
+                            rowClassName={(item: any) => {
+                                if ((item.day_session_total || 1) <= 1) return '';
+                                return item.is_last_session_of_day ? 'day-row-last' : 'day-row-session';
+                            }}
                             selection={selectedKasirRows}
                             onSelectionChange={(e) => setSelectedKasirRows(e.value as any[])}
                             expandedRows={expandedKasirRows}
@@ -1834,9 +1869,19 @@ const JadwalKaryawanContent = () => {
                                 align="center"
                                 headerStyle={{ fontWeight: 'bold', minWidth: '9.5rem' }}
                                 style={{ minWidth: '9.5rem' }}
-                                body={(item) => {
+                                bodyClassName={(item: any) => {
+                                    if ((item.day_session_total || 1) <= 1) return 'col-hari';
+                                    if (item.is_first_session_of_day) return 'col-hari col-hari-seamless';
+                                    if (item.is_last_session_of_day) return 'col-hari col-hari-last';
+                                    return 'col-hari col-hari-inner';
+                                }}
+                                body={(item: any) => {
+                                    if (!item.is_first_session_of_day) {
+                                        return null;
+                                    }
                                     const hKey = (item.hari || '').toLowerCase();
                                     const conf = HARI_CONFIG[hKey] || { label: item.hari, bg: '#f1f5f9', color: '#334155' };
+                                    const total = item.day_session_total || 1;
                                     return (
                                         <div className="flex flex-column align-items-center justify-content-center py-2">
                                             <span
@@ -1845,6 +1890,11 @@ const JadwalKaryawanContent = () => {
                                             >
                                                 {conf.label}
                                             </span>
+                                            {total > 1 && (
+                                                <span className="text-[10px] text-slate-400 font-medium mt-1.5 tracking-wide block">
+                                                    {total} Shift
+                                                </span>
+                                            )}
                                         </div>
                                     );
                                 }}

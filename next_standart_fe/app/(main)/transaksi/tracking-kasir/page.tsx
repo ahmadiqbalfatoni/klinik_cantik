@@ -1119,10 +1119,11 @@ export default function TrackingKasKasirPage() {
                   return (
                     <div className="flex justify-content-center">
                       <span
-                        className="border-circle inline-block"
+                        className="inline-block"
                         style={{
-                          width: '10px',
-                          height: '10px',
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '3px',
                           backgroundColor: dotColor,
                           boxShadow: r.status === 'open' ? '0 0 6px rgba(34, 197, 94, 0.6)' : 'none',
                         }}
@@ -1391,7 +1392,7 @@ export default function TrackingKasKasirPage() {
                   </div>
 
                   {/* Filter Bar Tab 2 */}
-                  <div className="flex flex-wrap align-items-center justify-content-between gap-2">
+                  <div className="flex flex-wrap xl:flex-nowrap align-items-center justify-content-between gap-2">
                     <div className="flex flex-wrap align-items-center gap-2">
                       {/* Filter Kasir */}
                       <Dropdown
@@ -1406,7 +1407,7 @@ export default function TrackingKasKasirPage() {
                           setSelectedKasirMutasi(val);
                         }}
                         placeholder="Semua Kasir"
-                        className="p-inputtext-sm text-sm border-round-md w-full md:w-12rem"
+                        className="p-inputtext-sm text-sm border-round-md w-full sm:w-9rem md:w-9rem"
                         showClear={Boolean(selectedKasirMutasi)}
                       />
 
@@ -1416,7 +1417,7 @@ export default function TrackingKasKasirPage() {
                         options={tipeMutasiOptions}
                         onChange={(e) => setSelectedTipeMutasi(e.value)}
                         placeholder="Tipe Mutasi"
-                        className="p-inputtext-sm text-sm border-round-md w-full md:w-11rem"
+                        className="p-inputtext-sm text-sm border-round-md w-full sm:w-8rem md:w-8.5rem"
                         showClear={Boolean(selectedTipeMutasi)}
                       />
 
@@ -1426,7 +1427,7 @@ export default function TrackingKasKasirPage() {
                         options={arusMutasiOptions}
                         onChange={(e) => setSelectedArusMutasi(e.value)}
                         placeholder="Arus Kas"
-                        className="p-inputtext-sm text-sm border-round-md w-full md:w-10rem"
+                        className="p-inputtext-sm text-sm border-round-md w-full sm:w-7rem md:w-7.5rem"
                         showClear={Boolean(selectedArusMutasi)}
                       />
 
@@ -1438,6 +1439,7 @@ export default function TrackingKasKasirPage() {
                           value={tanggalMulaiMutasi}
                           onChange={(e) => setTanggalMulaiMutasi(e.target.value)}
                           className="border-none bg-transparent text-xs p-1 text-700 outline-none"
+                          style={{ width: '7.6rem' }}
                         />
                         <span className="text-500 font-medium ml-1">Sampai:</span>
                         <input
@@ -1445,13 +1447,14 @@ export default function TrackingKasKasirPage() {
                           value={tanggalSelesaiMutasi}
                           onChange={(e) => setTanggalSelesaiMutasi(e.target.value)}
                           className="border-none bg-transparent text-xs p-1 text-700 outline-none"
+                          style={{ width: '7.6rem' }}
                         />
                       </div>
                     </div>
 
                     {/* Search Field & Reset Filter */}
                     <div className="flex align-items-center gap-2 ml-auto w-full md:w-auto">
-                      <IconField iconPosition="left" className="w-full md:w-16rem">
+                      <IconField iconPosition="left" className="w-full sm:w-11rem md:w-13rem">
                         <InputIcon className="pi pi-search" />
                         <InputText
                           value={keywordMutasi}
@@ -1471,7 +1474,7 @@ export default function TrackingKasKasirPage() {
                         icon="pi pi-filter"
                         size="small"
                         severity="success"
-                        className="border-round-md text-xs px-3"
+                        className="border-round-md text-xs px-2.5"
                         tooltip="Terapkan Filter"
                         tooltipOptions={{ position: 'bottom' }}
                         onClick={() => loadMutasiData(1, rowsMutasi)}
@@ -1482,6 +1485,7 @@ export default function TrackingKasKasirPage() {
                         icon="pi pi-filter-slash"
                         outlined
                         severity="danger"
+                        className="border-round-md text-xs px-2.5"
                         tooltip="Reset Filter"
                         tooltipOptions={{ position: 'bottom' }}
                         onClick={handleResetFilterMutasi}
