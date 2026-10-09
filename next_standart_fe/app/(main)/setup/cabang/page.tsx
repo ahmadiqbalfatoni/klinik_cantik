@@ -10,6 +10,7 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Dropdown } from 'primereact/dropdown';
+import { Password } from 'primereact/password';
 import { Divider } from 'primereact/divider';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
@@ -65,6 +66,21 @@ export default function ManajemenCabangPage() {
         pj_manager: '',
         status: 'aktif',
     });
+    const [managerFormData, setManagerFormData] = useState<{
+        fullname: string;
+        username: string;
+        telp: string;
+        role: string;
+        password: string;
+        status: string;
+    }>({
+        fullname: '',
+        username: '',
+        telp: '',
+        role: 'owner',
+        password: '',
+        status: '1',
+    });
     const [formLoading, setFormLoading] = useState<boolean>(false);
 
     const isSuperAdmin = (session?.user?.role || '').toLowerCase() === 'superadmin';
@@ -103,6 +119,14 @@ export default function ManajemenCabangPage() {
             pj_manager: '',
             status: 'aktif',
         });
+        setManagerFormData({
+            fullname: '',
+            username: '',
+            telp: '',
+            role: 'owner',
+            password: '',
+            status: '1',
+        });
         setShowModal(true);
     };
 
@@ -126,13 +150,47 @@ export default function ManajemenCabangPage() {
             return;
         }
 
+        if (!isEdit) {
+            if (!managerFormData.fullname.trim()) {
+                showError(toast, 'Nama Lengkap Manager wajib diisi!');
+                return;
+            }
+            if (!managerFormData.username.trim()) {
+                showError(toast, 'Username / Email Login Manager wajib diisi!');
+                return;
+            }
+            if (!managerFormData.telp.trim()) {
+                showError(toast, 'No. Telepon / WhatsApp Manager wajib diisi!');
+                return;
+            }
+            if (!managerFormData.password || managerFormData.password.length < 6) {
+                showError(toast, 'Password Login Manager minimal 6 karakter!');
+                return;
+            }
+        }
+
         setFormLoading(true);
         try {
             const endpoint = isEdit ? '/master/cabang-update' : '/master/cabang-create';
-            const res = await postData(endpoint, formData);
+            const payload: any = {
+                ...formData,
+                pj_manager: (!isEdit ? managerFormData.fullname.trim() : formData.pj_manager.trim()),
+            };
+
+            if (!isEdit) {
+                payload.create_manager = true;
+                payload.manager_fullname = managerFormData.fullname.trim();
+                payload.manager_username = managerFormData.username.trim();
+                payload.manager_telp = managerFormData.telp.trim();
+                payload.manager_role = managerFormData.role || 'owner';
+                payload.manager_status = managerFormData.status || '1';
+                payload.manager_password = managerFormData.password;
+            }
+
+            const res = await postData(endpoint, payload);
 
             if (['00', '0000', 200].includes(res?.data?.status) || res?.status === 200) {
-                showSuccess(toast, res?.data?.message || (isEdit ? 'Cabang berhasil diperbarui' : 'Cabang baru berhasil dibuat'));
+                showSuccess(toast, res?.data?.message || (isEdit ? 'Cabang berhasil diperbarui' : 'Cabang baru dan akun manager berhasil dibuat'));
                 setShowModal(false);
                 fetchCabang();
             } else {
@@ -432,7 +490,7 @@ export default function ManajemenCabangPage() {
             <Dialog
                 header={isEdit ? 'Edit Data Cabang' : 'Tambah Cabang Baru'}
                 visible={showModal}
-                style={{ width: '520px' }}
+                style={{ width: isEdit ? '520px' : '720px', maxWidth: '95vw' }}
                 modal
                 onHide={() => setShowModal(false)}
                 footer={
@@ -455,6 +513,7 @@ export default function ManajemenCabangPage() {
                 }
             >
                 <div className="flex flex-column gap-3 pt-2">
+                    {/* BAGIAN 1: INFORMASI CABANG */}
                     {isEdit && (
                         <div>
                             <label className="text-xs font-bold text-gray-700 block mb-1">Kode Cabang</label>
@@ -477,19 +536,21 @@ export default function ManajemenCabangPage() {
                         />
                     </div>
 
-                    <div>
-                        <label className="text-xs font-bold text-gray-700 block mb-1">Penanggung Jawab / Manager</label>
-                        <InputText
-                            value={formData.pj_manager}
-                            onChange={(e) => setFormData({ ...formData, pj_manager: e.target.value })}
-                            placeholder="Nama Dokter PJ / Manager Cabang"
-                            className="w-full text-sm"
-                        />
-                    </div>
+                    {isEdit && (
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">Penanggung Jawab / Manager</label>
+                            <InputText
+                                value={formData.pj_manager}
+                                onChange={(e) => setFormData({ ...formData, pj_manager: e.target.value })}
+                                placeholder="Nama Dokter PJ / Manager Cabang"
+                                className="w-full text-sm"
+                            />
+                        </div>
+                    )}
 
-                    <div className="grid">
+                    <div className="grid formgrid">
                         <div className="col-12 sm:col-6">
-                            <label className="text-xs font-bold text-gray-700 block mb-1">No. Telepon</label>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">No. Telepon Cabang</label>
                             <InputText
                                 value={formData.no_telp}
                                 onChange={(e) => setFormData({ ...formData, no_telp: e.target.value })}
@@ -514,7 +575,7 @@ export default function ManajemenCabangPage() {
                             value={formData.alamat}
                             onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
                             placeholder="Jalan, Nomor, Kelurahan, Kecamatan, Kota"
-                            rows={3}
+                            rows={2}
                             className="w-full text-sm"
                         />
                     </div>
@@ -531,6 +592,116 @@ export default function ManajemenCabangPage() {
                             className="w-full text-sm"
                         />
                     </div>
+
+                    {/* BAGIAN 2: DATA AKUN MANAGER CABANG BARU (Persis seperti Gambar 2) */}
+                    {!isEdit && (
+                        <>
+                            <Divider className="my-2" />
+                            <div className="border-round-xl p-3 bg-teal-50 border-1 border-teal-200">
+                                <div className="text-xs font-bold text-teal-800 uppercase tracking-wider flex align-items-center gap-2 mb-1">
+                                    <i className="pi pi-user-plus text-teal-600" />
+                                    Akun Manager Cabang Baru
+                                </div>
+                                <span className="text-[11px] text-teal-700 block mb-3">
+                                    Akun ini otomatis ditugaskan sebagai Owner / Manager untuk mengelola cabang baru ini saat pertama kali login.
+                                </span>
+
+                                <div className="grid formgrid">
+                                    {/* Baris 1: Nama Lengkap & Username / Email Login */}
+                                    <div className="col-12 sm:col-6 mb-2">
+                                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                                            Nama Lengkap <span className="text-red-500">*</span>
+                                        </label>
+                                        <InputText
+                                            value={managerFormData.fullname}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setManagerFormData({ ...managerFormData, fullname: val });
+                                                setFormData((prev) => ({ ...prev, pj_manager: val }));
+                                            }}
+                                            placeholder="Contoh: dr. Amanda Putri"
+                                            className="w-full text-sm bg-white"
+                                        />
+                                    </div>
+                                    <div className="col-12 sm:col-6 mb-2">
+                                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                                            Username / Email Login <span className="text-red-500">*</span>
+                                        </label>
+                                        <InputText
+                                            value={managerFormData.username}
+                                            onChange={(e) => setManagerFormData({ ...managerFormData, username: e.target.value })}
+                                            placeholder="Contoh: dokter@klinik.com"
+                                            className="w-full text-sm bg-white"
+                                        />
+                                    </div>
+
+                                    {/* Baris 2: No. Telepon / WhatsApp & Role Operasional */}
+                                    <div className="col-12 sm:col-6 mb-2">
+                                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                                            No. Telepon / WhatsApp <span className="text-red-500">*</span>
+                                        </label>
+                                        <InputText
+                                            value={managerFormData.telp}
+                                            onChange={(e) => setManagerFormData({ ...managerFormData, telp: e.target.value })}
+                                            placeholder="Contoh: 081234567890"
+                                            className="w-full text-sm bg-white"
+                                        />
+                                    </div>
+                                    <div className="col-12 sm:col-6 mb-2">
+                                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                                            Role Operasional <span className="text-red-500">*</span>
+                                        </label>
+                                        <Dropdown
+                                            value={managerFormData.role}
+                                            options={[
+                                                { label: 'Owner / Manager', value: 'owner' }
+                                            ]}
+                                            disabled
+                                            className="w-full text-sm bg-gray-50"
+                                        />
+                                    </div>
+
+                                    {/* Baris 3: Penempatan Cabang & Status Akun */}
+                                    <div className="col-12 sm:col-6 mb-2">
+                                        <label className="text-xs font-bold text-gray-700 block mb-1">Penempatan Cabang</label>
+                                        <InputText
+                                            value={formData.nama_cabang ? `Otomatis: ${formData.nama_cabang}` : 'Otomatis ke Cabang Baru Ini'}
+                                            disabled
+                                            className="w-full text-sm bg-gray-50 font-semibold text-teal-800"
+                                        />
+                                    </div>
+                                    <div className="col-12 sm:col-6 mb-2">
+                                        <label className="text-xs font-bold text-gray-700 block mb-1">Status Akun</label>
+                                        <Dropdown
+                                            value={managerFormData.status}
+                                            options={[
+                                                { label: 'Aktif', value: '1' },
+                                                { label: 'Tidak Aktif', value: '0' },
+                                            ]}
+                                            onChange={(e) => setManagerFormData({ ...managerFormData, status: e.value })}
+                                            className="w-full text-sm bg-white"
+                                        />
+                                    </div>
+
+                                    {/* Baris 4: Password Login */}
+                                    <div className="col-12 mb-1">
+                                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                                            Password Login <span className="text-red-500">*</span>
+                                        </label>
+                                        <Password
+                                            value={managerFormData.password}
+                                            onChange={(e) => setManagerFormData({ ...managerFormData, password: e.target.value })}
+                                            toggleMask
+                                            feedback={false}
+                                            placeholder="Minimal 6 karakter"
+                                            className="w-full text-sm"
+                                            inputClassName="w-full text-sm bg-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </Dialog>
         </div>
