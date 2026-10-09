@@ -274,4 +274,112 @@ router.post("/kasir-options", async (req, res) => {
   }
 });
 
+/**
+ * 4. AMBIL LIST LOG MUTASI KAS (TAB 2: LOG MUTASI KAS)
+ */
+router.post("/mutasi-data", async (req, res) => {
+  const oPayload = req.body || {};
+  const username = req?.auth?.username || "";
+  const rawBranch = getBranchScope(req, oPayload.kode_cabang);
+  const branchCode = sanitizeFilterString(rawBranch);
+
+  const rawKeyword = typeof oPayload.keyword === "object" ? oPayload.keyword?.value : oPayload.keyword;
+  const keyword = typeof rawKeyword === "string" ? rawKeyword.trim().toLowerCase() : "";
+  const filterUserCode = sanitizeFilterString(oPayload.user_code);
+  const filterTipe = sanitizeFilterString(oPayload.tipe);
+  const filterArus = sanitizeFilterString(oPayload.arus);
+  const filterTanggalMulai = sanitizeFilterString(oPayload.tanggal_mulai);
+  const filterTanggalSelesai = sanitizeFilterString(oPayload.tanggal_selesai);
+
+  const page = parseInt(oPayload.page, 10) || 1;
+  const perPage = parseInt(oPayload.perPage, 10) || 10;
+  const hasPagination = oPayload.page !== undefined || oPayload.perPage !== undefined;
+
+  try {
+    const applyFilters = (qb) => {
+      if (branchCode && typeof branchCode === "string") {
+        qb.where("m.kode_cabang", branchCode);
+      }
+      if (filterUserCode && typeof filterUserCode === "string") {
+        qb.where("m.user_code", filterUserCode);
+      }
+      if (filterTipe && typeof filterTipe === "string") {
+        qb.where("m.tipe", filterTipe);
+      }
+      if (filterArus && typeof filterArus === "string") {
+        qb.where("m.arus", filterArus);
+      }
+      if (filterTanggalMulai && typeof filterTanggalMulai === "string") {
+        qb.whereRaw("DATE(m.created_at) >= ?", [filterTanggalMulai]);
+      }
+      if (filterTanggalSelesai && typeof filterTanggalSelesai === "string") {
+        qb.whereRaw("DATE(m.created_at) <= ?", [filterTanggalSelesai]);
+      }
+      if (keyword && typeof keyword === "string") {
+        qb.where(function () {
+          this.whereRaw("LOWER(m.kode_mutasi) LIKE ?", [`%${keyword}%`])
+            .orWhereRaw("LOWER(m.kode_shift) LIKE ?", [`%${keyword}%`])
+            .orWhereRaw("LOWER(m.nama_kasir) LIKE ?", [`%${keyword}%`])
+            .orWhereRaw("LOWER(COALESCE(m.keterangan, '')) LIKE ?", [`%${keyword}%`])
+            .orWhereRaw("LOWER(COALESCE(m.referensi, '')) LIKE ?", [`%${keyword}%`])
+            .orWhereRaw("LOWER(COALESCE(m.kategori, '')) LIKE ?", [`%${keyword}%`]);
+        });
+      }
+    };
+
+    // Hitung total data
+    const countQuery = DB("trx_kasir_mutasi_kas as m");
+    applyFilters(countQuery);
+    const countResult = await countQuery.count("m.id as total").first();
+    const totalRecords = parseInt(countResult?.total || 0, 10);
+
+    // Hitung ringkasan mutasi (masuk & keluar)
+    const sumQuery = DB("trx_kasir_mutasi_kas as m");
+    applyFilters(sumQuery);
+    const sumResult = await sumQuery
+      .select(
+        DB.raw("COALESCE(SUM(CASE WHEN m.arus = 'masuk' THEN m.nominal ELSE 0 END), 0) as total_nominal_masuk"),
+        DB.raw("COALESCE(SUM(CASE WHEN m.arus = 'keluar' THEN m.nominal ELSE 0 END), 0) as total_nominal_keluar")
+      )
+      .first();
+
+    const dataQuery = DB("trx_kasir_mutasi_kas as m")
+      .select("m.*")
+      .orderBy("m.created_at", "desc");
+
+    applyFilters(dataQuery);
+
+    let rows = [];
+    if (hasPagination) {
+      const offset = (page - 1) * perPage;
+      rows = await dataQuery.limit(perPage).offset(offset);
+    } else {
+      rows = await dataQuery;
+    }
+
+    return res.status(200).json({
+      status: status.SUKSES,
+      message: "Data log mutasi kas berhasil diambil",
+      datetime: formatDateSystem(),
+      data: {
+        records: rows,
+        totalRecords,
+        page,
+        perPage,
+        summary: {
+          total_nominal_masuk: parseFloat(sumResult?.total_nominal_masuk || 0),
+          total_nominal_keluar: parseFloat(sumResult?.total_nominal_keluar || 0),
+        },
+      },
+    });
+  } catch (error) {
+    Logging(error, { file: "kasir_tracking_kas.js", func: "mutasi-data", user: username });
+    return res.status(500).json({
+      status: status.BAD_REQUEST,
+      message: error.message || "Gagal mengambil log mutasi kas",
+      datetime: formatDateSystem(),
+    });
+  }
+});
+
 export default router;

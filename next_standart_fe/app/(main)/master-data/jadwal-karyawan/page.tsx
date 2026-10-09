@@ -169,6 +169,8 @@ const JadwalKaryawanContent = () => {
     const [filterKasirHari, setFilterKasirHari] = useState<string>('');
     const [filterKasirStaff, setFilterKasirStaff] = useState<string>('');
     const [filterKasirStatus, setFilterKasirStatus] = useState<string>('');
+    const [selectedKasirRows, setSelectedKasirRows] = useState<any[]>([]);
+    const [expandedKasirRows, setExpandedKasirRows] = useState<any>(null);
     const [kasirStaffOptions, setKasirStaffOptions] = useState<any[]>([]);
     const [kasirDialogVisible, setKasirDialogVisible] = useState<boolean>(false);
     const [isEditKasir, setIsEditKasir] = useState<boolean>(false);
@@ -425,12 +427,12 @@ const JadwalKaryawanContent = () => {
         });
     }, [kasirJadwalList, filterKasirHari, filterKasirStaff, filterKasirStatus, kasirSearch]);
 
-    const handleOpenCreateKasir = () => {
+    const handleOpenCreateKasir = (hari?: string) => {
         setIsEditKasir(false);
         setKasirFormData({
             kode_jadwal: '',
             no_sip: kasirStaffOptions.length > 0 ? kasirStaffOptions[0].value : '',
-            hari: filterKasirHari || 'senin',
+            hari: hari || filterKasirHari || 'senin',
             jam_mulai: '08:00',
             jam_selesai: '15:00',
             status: 'aktif',
@@ -506,6 +508,33 @@ const JadwalKaryawanContent = () => {
                         kode_jadwal: [item.kode_jadwal],
                     });
                     showSuccess(toast, res.data?.message || 'Jadwal kasir berhasil dihapus');
+                    setSelectedKasirRows((prev) => prev.filter((r) => r.kode_jadwal !== item.kode_jadwal));
+                    loadKasirJadwal();
+                } catch (err: any) {
+                    showError(toast, err?.response?.data?.message || 'Gagal menghapus jadwal kasir');
+                }
+            },
+        });
+    };
+
+    const handleBulkDeleteKasir = () => {
+        if (selectedKasirRows.length === 0) return;
+        const codes = selectedKasirRows.map((r: any) => r.kode_jadwal).filter(Boolean);
+        if (codes.length === 0) return;
+        confirmDialog({
+            message: `Apakah Anda yakin ingin menghapus ${codes.length} jadwal kasir yang dipilih?`,
+            header: 'Konfirmasi Hapus Masal Jadwal Kasir',
+            icon: 'pi pi-exclamation-triangle',
+            acceptClassName: 'p-button-danger',
+            acceptLabel: 'Ya, Hapus Semua',
+            rejectLabel: 'Batal',
+            accept: async () => {
+                try {
+                    const res = await postData('/master/jadwal-karyawan-delete', {
+                        kode_jadwal: codes,
+                    });
+                    showSuccess(toast, res.data?.message || 'Jadwal kasir berhasil dihapus');
+                    setSelectedKasirRows([]);
                     loadKasirJadwal();
                 } catch (err: any) {
                     showError(toast, err?.response?.data?.message || 'Gagal menghapus jadwal kasir');
@@ -1582,15 +1611,36 @@ const JadwalKaryawanContent = () => {
                             </div>
                         </div>
 
-                        {/* Action Buttons Toolbar */}
+                        {/* Action Buttons Toolbar (Mengikuti gaya Jadwal Dokter) */}
                         <div className="flex flex-row flex-wrap align-items-center gap-2 mb-4">
                             <Button
                                 size="small"
                                 label="Tambah Jadwal Kasir"
                                 icon="pi pi-plus"
+                                outlined
                                 severity="success"
                                 className="border-round-md font-medium px-3"
-                                onClick={handleOpenCreateKasir}
+                                onClick={() => handleOpenCreateKasir()}
+                            />
+                            <Divider layout="vertical" className="m-0 h-2rem" />
+                            <Button
+                                size="small"
+                                label="Cetak"
+                                icon="pi pi-print"
+                                outlined
+                                className="border-round-md font-medium px-3 border-purple-600 text-purple-600"
+                                onClick={() => window.print()}
+                            />
+                            <Divider layout="vertical" className="m-0 h-2rem" />
+                            <Button
+                                size="small"
+                                label={`Hapus${selectedKasirRows.length > 0 ? ` (${selectedKasirRows.length})` : ''}`}
+                                icon="pi pi-trash"
+                                severity="danger"
+                                outlined
+                                disabled={selectedKasirRows.length === 0}
+                                className="border-round-md font-medium px-3"
+                                onClick={handleBulkDeleteKasir}
                             />
                             <Divider layout="vertical" className="m-0 h-2rem" />
                             <Button
@@ -1605,114 +1655,222 @@ const JadwalKaryawanContent = () => {
                             />
                         </div>
 
-                        {/* DataTable Jadwal Kasir */}
+                        {/* DataTable Jadwal Kasir (Pola Lengkap Seragam dengan Jadwal Dokter) */}
                         <DataTable
                             value={filteredKasirJadwals}
                             loading={loadingKasirJadwal}
                             paginator
                             rows={10}
                             rowsPerPageOptions={[10, 25, 50]}
-                            header={
-                                <div className="flex flex-wrap align-items-center justify-content-between gap-2">
-                                    <span className="text-xl font-bold text-900">Daftar Jadwal Kasir</span>
-                                    <div className="flex flex-wrap align-items-center gap-2 ml-auto">
-                                        <Dropdown
-                                            value={filterKasirHari}
-                                            options={[{ label: 'Semua Hari', value: '' }, ...HARI_OPTIONS]}
-                                            onChange={(e) => setFilterKasirHari(e.value)}
-                                            placeholder="Filter Hari"
-                                            className="text-xs w-10rem"
-                                        />
-                                        <Dropdown
-                                            value={filterKasirStaff}
-                                            options={[{ label: 'Semua Kasir', value: '' }, ...kasirStaffOptions]}
-                                            onChange={(e) => setFilterKasirStaff(e.value)}
-                                            placeholder="Filter Kasir"
-                                            className="text-xs w-12rem"
-                                        />
-                                        <Dropdown
-                                            value={filterKasirStatus}
-                                            options={[
-                                                { label: 'Semua Status', value: '' },
-                                                { label: 'Aktif', value: 'aktif' },
-                                                { label: 'Nonaktif', value: 'nonaktif' },
-                                            ]}
-                                            onChange={(e) => setFilterKasirStatus(e.value)}
-                                            placeholder="Status"
-                                            className="text-xs w-9rem"
-                                        />
-                                        <IconField iconPosition="left" className="w-14rem">
-                                            <InputIcon className="pi pi-search" />
-                                            <InputText
-                                                value={kasirSearch}
-                                                onChange={(e) => setKasirSearch(e.target.value)}
-                                                placeholder="Cari Kasir..."
-                                                className="w-full text-xs"
-                                            />
-                                        </IconField>
-                                        <Button
-                                            type="button"
-                                            icon="pi pi-filter-slash"
-                                            outlined
-                                            severity="danger"
-                                            size="small"
-                                            tooltip="Reset Filter"
-                                            onClick={() => {
-                                                setKasirSearch('');
-                                                setFilterKasirHari('');
-                                                setFilterKasirStaff('');
-                                                setFilterKasirStatus('');
-                                            }}
-                                        />
+                            selection={selectedKasirRows}
+                            onSelectionChange={(e) => setSelectedKasirRows(e.value as any[])}
+                            expandedRows={expandedKasirRows}
+                            onRowToggle={(e) => setExpandedKasirRows(e.data)}
+                            rowExpansionTemplate={(item: any) => {
+                                const namaHari = HARI_CONFIG[(item.hari || '').toLowerCase()]?.label || item.hari;
+                                const jamM = (item.jam_mulai || '00:00').slice(0, 5);
+                                const jamS = (item.jam_selesai || '00:00').slice(0, 5);
+
+                                return (
+                                    <div className="p-4 surface-50 border-round-xl border-1 surface-border my-3 shadow-xs">
+                                        <div style={{ marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                <div style={{
+                                                    width: '28px',
+                                                    height: '28px',
+                                                    borderRadius: '6px',
+                                                    backgroundColor: '#d1fae5',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    <i className="pi pi-id-card" style={{ color: '#059669', fontSize: '13px' }} />
+                                                </div>
+                                                <div style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', lineHeight: '1.4' }}>
+                                                    Rincian Sesi Kasir: <span style={{ color: '#1e293b' }}>{namaHari} ({jamM} - {jamS} WIB)</span>
+                                                </div>
+                                                <Tag
+                                                    value={item.status === 'aktif' ? 'Status: Aktif' : 'Status: Tidak Aktif'}
+                                                    severity={item.status === 'aktif' ? 'success' : 'danger'}
+                                                    className="text-xs px-2 py-0.5"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid text-xs">
+                                            <div className="col-12 sm:col-4 p-1">
+                                                <div className="p-3 surface-card border-round-lg border-1 border-200">
+                                                    <span className="text-500 text-[11px] font-semibold uppercase block mb-1">Informasi Karyawan</span>
+                                                    <div className="font-bold text-slate-900 text-sm">{item.nama_karyawan}</div>
+                                                    <div className="text-slate-600 mt-1">Jabatan: Kasir</div>
+                                                    <div className="text-slate-500 mt-0.5">No SIP / ID: {item.no_sip || '-'}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-12 sm:col-4 p-1">
+                                                <div className="p-3 surface-card border-round-lg border-1 border-200">
+                                                    <span className="text-500 text-[11px] font-semibold uppercase block mb-1">Jadwal Shift Kerja</span>
+                                                    <div className="font-bold text-teal-800 text-sm">{namaHari}, {jamM} - {jamS} WIB</div>
+                                                    <div className="text-slate-600 mt-1">Kode Jadwal: <span className="font-mono">{item.kode_jadwal}</span></div>
+                                                    <div className="text-slate-500 mt-0.5">Tipe: {jamM < '12:00' ? 'Shift Pagi' : 'Shift Siang / Sore'}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-12 sm:col-4 p-1">
+                                                <div className="p-3 surface-card border-round-lg border-1 border-200 flex flex-column justify-content-between">
+                                                    <div>
+                                                        <span className="text-500 text-[11px] font-semibold uppercase block mb-1">Aksi Cepat</span>
+                                                        <div className="text-slate-600">Perbarui jam kerja atau tambahkan shift baru di hari ini</div>
+                                                    </div>
+                                                    <div className="flex gap-2 mt-2">
+                                                        <Button
+                                                            label="Edit Jadwal"
+                                                            icon="pi pi-pencil"
+                                                            size="small"
+                                                            outlined
+                                                            severity="success"
+                                                            className="text-xs px-2 py-1 border-round-md"
+                                                            onClick={() => handleOpenEditKasir(item)}
+                                                        />
+                                                        <Button
+                                                            label="Tambah Sesi Baru"
+                                                            icon="pi pi-calendar-plus"
+                                                            size="small"
+                                                            outlined
+                                                            severity="help"
+                                                            className="text-xs px-2 py-1 border-round-md"
+                                                            onClick={() => handleOpenCreateKasir(item.hari)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            }
-                            emptyMessage="Belum ada data jadwal kasir yang tersimpan"
+                                );
+                            }}
+                            dataKey="kode_jadwal"
+                            className="p-datatable-sm table-jadwal-custom"
+                            emptyMessage="Belum ada data jadwal kasir yang tersimpan. Silakan klik tombol '+ Tambah Jadwal Kasir'."
                             rowHover
-                            className="text-sm"
+                            responsiveLayout="scroll"
                             paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                             currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data"
+                            header={
+                                <div className="flex flex-column gap-3">
+                                    <div className="flex flex-wrap align-items-center justify-content-between gap-2">
+                                        <div className="flex align-items-center gap-2">
+                                            <span className="text-xl font-bold">Data Jadwal</span>
+                                            <span className="text-xs text-500 font-semibold bg-slate-100 px-2 py-0.5 border-round">
+                                                Total: {filteredKasirJadwals.length} Jadwal
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-wrap align-items-center gap-2 ml-auto w-full md:w-auto">
+                                            <Dropdown
+                                                value={filterKasirHari}
+                                                options={[{ label: 'Semua Hari', value: '' }, ...HARI_OPTIONS]}
+                                                onChange={(e) => setFilterKasirHari(e.value)}
+                                                placeholder="Filter Hari"
+                                                className="w-full sm:w-11rem p-inputtext-sm text-sm border-round-md"
+                                            />
+                                            <Dropdown
+                                                value={filterKasirStaff}
+                                                options={[{ label: 'Semua Kasir', value: '' }, ...kasirStaffOptions]}
+                                                onChange={(e) => setFilterKasirStaff(e.value)}
+                                                placeholder="Filter Kasir"
+                                                className="w-full sm:w-12rem p-inputtext-sm text-sm border-round-md"
+                                            />
+                                            <IconField iconPosition="left" className="w-full sm:w-16rem">
+                                                <InputIcon className="pi pi-search" />
+                                                <InputText
+                                                    value={kasirSearch}
+                                                    onChange={(e) => setKasirSearch(e.target.value)}
+                                                    placeholder="Cari Data..."
+                                                    className="w-full text-sm"
+                                                />
+                                            </IconField>
+                                            <Button
+                                                type="button"
+                                                icon="pi pi-filter-slash"
+                                                outlined
+                                                severity="danger"
+                                                tooltip="Reset Filter"
+                                                tooltipOptions={{ position: 'bottom' }}
+                                                onClick={() => {
+                                                    setKasirSearch('');
+                                                    setFilterKasirHari('');
+                                                    setFilterKasirStaff('');
+                                                    setFilterKasirStatus('');
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <KeteranganStatus className="mb-2" />
+                                </div>
+                            }
                         >
+                            <Column expander style={{ width: '3.5rem' }} />
+                            <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
+                            <Column
+                                header=""
+                                headerStyle={{ width: '3rem' }}
+                                align="center"
+                                body={(item) => (
+                                    <span
+                                        style={{
+                                            display: 'inline-block',
+                                            width: '14px',
+                                            height: '14px',
+                                            borderRadius: '3px',
+                                            backgroundColor: item.status === 'aktif' ? '#22c55e' : '#ef4444',
+                                            boxShadow: item.status === 'aktif' ? '0 1px 3px #22c55e55' : '0 1px 3px #ef444455',
+                                        }}
+                                        title={item.status === 'aktif' ? 'Status: Aktif' : 'Status: Tidak Aktif'}
+                                    />
+                                )}
+                            />
                             <Column
                                 field="hari"
                                 header="Hari"
                                 sortable
-                                style={{ minWidth: '9rem' }}
+                                align="center"
+                                headerStyle={{ fontWeight: 'bold', minWidth: '9.5rem' }}
+                                style={{ minWidth: '9.5rem' }}
                                 body={(item) => {
-                                    const h = (item.hari || '').toLowerCase();
-                                    const cfg = HARI_CONFIG[h] || { label: h, bg: '#f1f5f9', color: '#475569' };
+                                    const hKey = (item.hari || '').toLowerCase();
+                                    const conf = HARI_CONFIG[hKey] || { label: item.hari, bg: '#f1f5f9', color: '#334155' };
                                     return (
-                                        <span
-                                            style={{ backgroundColor: cfg.bg, color: cfg.color }}
-                                            className="font-bold text-xs px-2.5 py-1 border-round-md uppercase tracking-wider inline-block"
-                                        >
-                                            {cfg.label}
-                                        </span>
+                                        <div className="flex flex-column align-items-center justify-content-center py-2">
+                                            <span
+                                                className="font-extrabold uppercase px-2.5 py-1 border-round-md text-xs tracking-wider shadow-xs"
+                                                style={{ backgroundColor: conf.bg, color: conf.color }}
+                                            >
+                                                {conf.label}
+                                            </span>
+                                        </div>
                                     );
                                 }}
                             />
                             <Column
                                 field="nama_karyawan"
-                                header="Nama Kasir"
+                                header="Penanggung Jawab"
                                 sortable
-                                style={{ minWidth: '14rem' }}
+                                headerStyle={{ fontWeight: 'bold', minWidth: '15rem' }}
+                                style={{ minWidth: '15rem' }}
                                 body={(item) => (
-                                    <div className="flex align-items-center gap-2">
-                                        <div
-                                            className="w-2rem h-2rem border-round-circle flex align-items-center justify-content-center text-xs font-bold text-white shadow-1"
-                                            style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
-                                        >
-                                            {(item.nama_karyawan || 'K').charAt(0).toUpperCase()}
+                                    <div className="py-1 pr-3">
+                                        <div className="font-bold text-slate-900 text-sm">
+                                            {item.nama_karyawan}
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-900 text-sm">{item.nama_karyawan}</div>
-                                            <div className="text-500 text-xs">No SIP/ID: {item.no_sip || '-'}</div>
+                                        <div className="text-[11px] text-slate-500 mt-0.5">
+                                            kasir • SIP/ID: {item.no_sip || '-'}
                                         </div>
                                     </div>
                                 )}
                             />
                             <Column
-                                header="Jam Kerja"
+                                field="jam_mulai"
+                                header="Jam Operasional"
+                                sortable
+                                headerStyle={{ fontWeight: 'bold', minWidth: '13rem' }}
                                 style={{ minWidth: '13rem' }}
                                 body={(item) => {
                                     const jM = (item.jam_mulai || '00:00').slice(0, 5);
@@ -1720,7 +1878,8 @@ const JadwalKaryawanContent = () => {
                                     const isPagi = jM < '12:00';
                                     return (
                                         <div className="flex align-items-center gap-2">
-                                            <span className="font-mono font-bold text-teal-800 text-sm">
+                                            <span className="font-semibold text-slate-700 flex align-items-center">
+                                                <i className="pi pi-clock text-xs text-slate-400 mr-2" />
                                                 {jM} - {jS} WIB
                                             </span>
                                             <Tag
@@ -1737,11 +1896,12 @@ const JadwalKaryawanContent = () => {
                                 header="Status"
                                 align="center"
                                 sortable
-                                style={{ minWidth: '8rem' }}
+                                headerStyle={{ fontWeight: 'bold', minWidth: '7.5rem' }}
+                                style={{ minWidth: '7.5rem' }}
                                 body={(item) => (
                                     <Tag
                                         severity={item.status === 'aktif' ? 'success' : 'danger'}
-                                        value={item.status === 'aktif' ? 'Aktif' : 'Nonaktif'}
+                                        value={item.status === 'aktif' ? 'Aktif' : 'Tidak Aktif'}
                                         className="text-xs px-2.5 py-1 font-semibold"
                                     />
                                 )}
@@ -1749,15 +1909,22 @@ const JadwalKaryawanContent = () => {
                             <Column
                                 header="Aksi"
                                 align="center"
-                                style={{ minWidth: '8rem' }}
+                                headerStyle={{ width: '9rem', textAlign: 'center' }}
+                                style={{ minWidth: '9rem' }}
                                 body={(item) => (
-                                    <div className="flex align-items-center justify-content-center gap-1">
+                                    <div className="flex align-items-center justify-content-center gap-2">
+                                        <Button
+                                            icon="pi pi-calendar-plus"
+                                            outlined
+                                            className="p-button-sm border-round-md btn-action-outline btn-action-purple"
+                                            onClick={() => handleOpenCreateKasir(item.hari)}
+                                            tooltip={`Tambah Sesi Baru (${HARI_CONFIG[item.hari?.toLowerCase()]?.label || item.hari})`}
+                                            tooltipOptions={{ position: 'top' }}
+                                        />
                                         <Button
                                             icon="pi pi-pencil"
                                             outlined
-                                            size="small"
-                                            severity="success"
-                                            className="p-button-sm border-round-md"
+                                            className="p-button-sm border-round-md btn-action-outline btn-action-green"
                                             onClick={() => handleOpenEditKasir(item)}
                                             tooltip="Edit Jadwal Kasir"
                                             tooltipOptions={{ position: 'top' }}
@@ -1765,9 +1932,7 @@ const JadwalKaryawanContent = () => {
                                         <Button
                                             icon="pi pi-trash"
                                             outlined
-                                            size="small"
-                                            severity="danger"
-                                            className="p-button-sm border-round-md"
+                                            className="p-button-sm border-round-md btn-action-outline btn-action-red"
                                             onClick={() => handleDeleteKasirJadwal(item)}
                                             tooltip="Hapus Jadwal Kasir"
                                             tooltipOptions={{ position: 'top' }}

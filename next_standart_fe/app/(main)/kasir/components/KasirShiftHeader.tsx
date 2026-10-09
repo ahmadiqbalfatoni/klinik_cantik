@@ -256,21 +256,21 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
 
       {/* ── BAR SESI SHIFT KASIR ── */}
       {(!isKasirRole || scheduleAllowed) && (
-        <div className="p-3 border-round-xl surface-card shadow-1 border-1 surface-border flex flex-wrap align-items-center justify-content-between gap-3">
+        <div className="px-4 py-3 border-round-xl surface-card shadow-1 border-1 surface-border flex flex-wrap align-items-center justify-content-between gap-3">
           {/* Kondisi 1: Shift Belum Dibuka */}
           {!activeShift && (
             <div className="flex flex-wrap align-items-center justify-content-between w-full gap-3">
               <div className="flex align-items-center gap-3">
-                <div className="w-2.5rem h-2.5rem border-round-lg bg-amber-100 flex align-items-center justify-content-center text-amber-700">
-                  <i className="pi pi-calendar-times text-lg" />
+                <div className="w-3rem h-3rem border-round-xl bg-amber-50 border-1 border-amber-200 flex align-items-center justify-content-center text-amber-600 flex-shrink-0 shadow-xs">
+                  <i className="pi pi-calendar-times text-xl" />
                 </div>
                 <div>
                   <div className="font-bold text-900 text-sm flex align-items-center gap-2">
                     <span>Sesi Shift Kasir Belum Dibuka</span>
-                    <Tag severity="warning" value="Shift Belum Aktif" className="text-[10px] px-2 py-0.5" />
+                    <Tag severity="warning" value="Shift Belum Aktif" className="text-[10px] px-2 py-0.5 border-round-md font-semibold" />
                   </div>
-                  <div className="text-500 text-xs mt-0.5">
-                    Kasir: <strong>{scheduleInfo?.karyawan?.nama || session?.user?.name || 'Kasir'}</strong>. Buka sesi shift dengan modal kas awal untuk mulai bertransaksi.
+                  <div className="text-500 text-xs mt-1">
+                    Kasir: <strong className="text-700">{scheduleInfo?.karyawan?.nama || session?.user?.name || 'Kasir'}</strong>. Buka sesi shift dengan modal kas awal untuk mulai bertransaksi.
                   </div>
                 </div>
               </div>
@@ -281,7 +281,7 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                   icon="pi pi-lock-open"
                   severity="success"
                   size="small"
-                  className="border-round-md font-bold text-xs px-3 shadow-1"
+                  className="border-round-lg font-bold text-xs px-3.5 py-2 shadow-1"
                   onClick={() => {
                     setModalAwalInput(200000);
                     setCatatanBukaInput('');
@@ -295,56 +295,60 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
           {/* Kondisi 2: Shift Sedang Aktif (OPEN) */}
           {activeShift && (
             <div className="flex flex-wrap align-items-center justify-content-between w-full gap-3">
-              <div className="flex flex-wrap align-items-center gap-3">
+              <div className="flex flex-wrap align-items-center gap-3 lg:gap-4">
                 {/* Badge Sesi Shift */}
-                <div className="flex align-items-center gap-2 pr-3 border-right-1 surface-border">
-                  <div className="w-2.5rem h-2.5rem border-round-lg bg-teal-100 flex align-items-center justify-content-center text-teal-700">
-                    <i className="pi pi-wallet text-lg" />
+                <div className="flex align-items-center gap-3 pr-3 lg:pr-4 border-right-1 surface-border">
+                  <div className="w-3rem h-3rem border-round-xl bg-teal-50 border-1 border-teal-200 flex align-items-center justify-content-center text-teal-600 flex-shrink-0 shadow-xs">
+                    <i className="pi pi-wallet text-xl" />
                   </div>
                   <div>
-                    <div className="font-bold text-teal-800 text-xs flex align-items-center gap-1.5">
+                    <div className="font-bold text-teal-900 text-sm flex align-items-center gap-2">
                       <span className="w-2 h-2 border-round-circle bg-green-500 inline-block animate-pulse" />
-                      <span>{activeShift.kode_shift}</span>
-                      <Tag severity="success" value="Sedang Aktif" className="text-[9px] px-1.5 py-0" />
+                      <span className="font-mono tracking-tight">{activeShift.kode_shift}</span>
+                      <Tag severity="success" value="Sedang Aktif" className="text-[10px] px-2 py-0.5 font-semibold border-round-md" />
                     </div>
-                    <div className="text-500 text-[11px] mt-0.5">
-                      Kasir: <strong>{activeShift.nama_kasir}</strong> | Buka: {activeShift.waktu_buka ? format(new Date(activeShift.waktu_buka), 'HH:mm') : '-'} WIB
+                    <div className="text-600 text-xs mt-1 flex align-items-center gap-2">
+                      <span>Kasir: <strong className="text-800">{activeShift.nama_kasir}</strong></span>
+                      <span className="text-300">•</span>
+                      <span className="text-500 flex align-items-center gap-1">
+                        <i className="pi pi-clock text-[11px] text-400" /> Buka: <strong className="text-700">{activeShift.waktu_buka ? format(new Date(activeShift.waktu_buka), 'HH:mm') : '-'} WIB</strong>
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 {/* Ringkasan Kas Cepat */}
-                <div className="flex flex-wrap align-items-center gap-3 text-xs">
-                  <div className="px-2 py-1 border-round-md bg-slate-50 border-1 surface-border">
-                    <span className="text-500 text-[10px] block">Modal Awal:</span>
-                    <strong className="text-slate-800">{formatRupiah(activeShift.modal_awal)}</strong>
+                <div className="flex flex-wrap align-items-center gap-2.5 sm:gap-3">
+                  <div className="px-3 py-1.5 border-round-lg bg-surface-50 border-1 surface-border flex flex-column justify-content-center">
+                    <span className="text-500 text-[10px] font-semibold uppercase tracking-wider block mb-0.5">Modal Awal</span>
+                    <strong className="text-slate-800 text-xs font-mono">{formatRupiah(activeShift.modal_awal)}</strong>
                   </div>
-                  <div className="px-2 py-1 border-round-md bg-green-50 border-1 border-green-200">
-                    <span className="text-green-700 text-[10px] block">Tunai Masuk:</span>
-                    <strong className="text-green-800">+{formatRupiah(activeShift.total_penjualan_tunai)}</strong>
+                  <div className="px-3 py-1.5 border-round-lg bg-green-50 border-1 border-green-200 flex flex-column justify-content-center">
+                    <span className="text-green-700 text-[10px] font-semibold uppercase tracking-wider block mb-0.5">Tunai Masuk</span>
+                    <strong className="text-green-700 text-xs font-mono">+{formatRupiah(activeShift.total_penjualan_tunai)}</strong>
                   </div>
                   {parseFloat(activeShift.total_kas_keluar || 0) > 0 && (
-                    <div className="px-2 py-1 border-round-md bg-red-50 border-1 border-red-200">
-                      <span className="text-red-700 text-[10px] block">Kas Keluar:</span>
-                      <strong className="text-red-800">-{formatRupiah(activeShift.total_kas_keluar)}</strong>
+                    <div className="px-3 py-1.5 border-round-lg bg-red-50 border-1 border-red-200 flex flex-column justify-content-center">
+                      <span className="text-red-700 text-[10px] font-semibold uppercase tracking-wider block mb-0.5">Kas Keluar</span>
+                      <strong className="text-red-700 text-xs font-mono">-{formatRupiah(activeShift.total_kas_keluar)}</strong>
                     </div>
                   )}
-                  <div className="px-2.5 py-1 border-round-md bg-teal-50 border-1 border-teal-300">
-                    <span className="text-teal-700 text-[10px] block font-medium">Kas Fisik Laci:</span>
+                  <div className="px-3.5 py-1.5 border-round-lg bg-teal-50 border-1 border-teal-300 flex flex-column justify-content-center shadow-xs">
+                    <span className="text-teal-800 text-[10px] font-bold uppercase tracking-wider block mb-0.5">Kas Fisik Laci</span>
                     <strong className="text-teal-900 text-sm font-mono">{formatRupiah(activeShift.kas_diharapkan)}</strong>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons Sesi */}
-              <div className="flex align-items-center gap-2 ml-auto">
+              <div className="flex align-items-center gap-2.5 ml-auto">
                 <Button
                   label="Catat Kas Keluar / Masuk"
                   icon="pi pi-plus-circle"
                   outlined
                   severity="secondary"
                   size="small"
-                  className="border-round-md text-xs font-semibold px-2.5 py-1.5"
+                  className="border-round-lg text-xs font-semibold px-3 py-2 text-700 hover:text-900 border-300"
                   onClick={() => {
                     setMutasiTipe('kas_keluar');
                     setMutasiKategori('Pengeluaran Operasional Kasir');
@@ -353,6 +357,7 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                     setShowMutasiModal(true);
                   }}
                   tooltip="Catat pengeluaran kasir (petty cash) atau penambahan modal"
+                  tooltipOptions={{ position: 'bottom' }}
                 />
                 <Button
                   label="Riwayat Kas"
@@ -360,24 +365,27 @@ export function KasirShiftHeader({ toast, onShiftStateChange, refreshKey = 0 }: 
                   outlined
                   severity="secondary"
                   size="small"
-                  className="border-round-md text-xs font-semibold px-2.5 py-1.5"
+                  className="border-round-lg text-xs font-semibold px-3 py-2 text-700 hover:text-900 border-300"
                   onClick={() => {
                     loadActiveShift();
                     setShowRiwayatModal(true);
                   }}
+                  tooltip="Lihat riwayat mutasi kas sesi ini"
+                  tooltipOptions={{ position: 'bottom' }}
                 />
                 <Button
                   label="Tutup Shift"
                   icon="pi pi-lock"
                   severity="danger"
                   size="small"
-                  className="border-round-md font-bold text-xs px-3 py-1.5 shadow-1"
+                  className="border-round-lg font-bold text-xs px-3.5 py-2 shadow-1"
                   onClick={() => {
                     setKasAktualInput(parseFloat(activeShift.kas_diharapkan || 0));
                     setCatatanTutupInput('');
                     setShowTutupModal(true);
                   }}
                   tooltip="Rekonsiliasi kas dan tutup sesi kasir di akhir hari kerja"
+                  tooltipOptions={{ position: 'bottom' }}
                 />
               </div>
             </div>
